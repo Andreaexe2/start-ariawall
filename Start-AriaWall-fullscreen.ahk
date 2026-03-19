@@ -207,24 +207,23 @@ ArrayContains(arr, value) {
 }
 
 ShowConfirmOnMonitor(monitor) {
-    gui := Gui("+AlwaysOnTop +ToolWindow -SysMenu")
-    gui.SetFont("s16 bold")
-    gui.AddText("w520 Center", "Completa il login nella finestra in alto a sinistra, poi premi OK per aprire automaticamente le altre tre finestre.")
-    okBtn := gui.AddButton("w160 h50 Default", "OK")
+    myGui := Gui("+AlwaysOnTop +ToolWindow -SysMenu")
+    myGui.SetFont("s16 bold")
+    myGui.AddText("w520 Center", "Completa il login nella finestra in alto a sinistra, poi premi OK per aprire automaticamente le altre tre finestre.")
+    
+    okBtn := myGui.AddButton("w160 h50 Default", "OK")
+    okBtn.OnEvent("Click", (*) => myGui.Destroy())
 
-    confirmed := false
-    okBtn.OnEvent("Click", (*) => (confirmed := true, gui.Destroy()))
+    myGui.Show("AutoSize Hide")
+    
+    xOut := 0, yOut := 0, wOut := 0, hOut := 0
+    myGui.GetPos(&xOut, &yOut, &wOut, &hOut)
+    
+    xPos := monitor.Left + Floor((monitor.Width - wOut) / 2)
+    yPos := monitor.Top + Floor((monitor.Height - hOut) / 2)
+    myGui.Show(Format("x{} y{}", xPos, yPos))
 
-    gui.Show("AutoSize Hide")
-    w := 0, h := 0
-    gui.GetPos(, , &w, &h)
-    x := monitor.Left + Floor((monitor.Width - w) / 2)
-    y := monitor.Top + Floor((monitor.Height - h) / 2)
-    gui.Show(Format("x{} y{}", x, y))
+    WinWaitClose("ahk_id " myGui.Hwnd)
 
-    while gui.Hwnd {
-        Sleep 50
-    }
-
-    return confirmed
+    return true
 }

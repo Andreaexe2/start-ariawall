@@ -138,7 +138,8 @@ SortMonitors(arr, prop) {
         swapped := false
         Loop len - A_Index {
             j := A_Index
-            if (copy[j][prop] > copy[j + 1][prop]) {
+            ; use dynamic property access via .%prop% to avoid __Item/_item errors
+            if (copy[j].%prop% > copy[j + 1].%prop%) {
                 tmp := copy[j]
                 copy[j] := copy[j + 1]
                 copy[j + 1] := tmp

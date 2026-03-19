@@ -52,7 +52,7 @@ if (!firstHwnd) {
     ExitApp
 }
 
-MsgBox "Completa il login nella finestra in alto a sinistra, poi premi OK per aprire automaticamente le altre tre finestre."
+ShowConfirmOnMonitor(wall.TopRight)
 
 OpenEdgeOnMonitor(edgePath, TopRightUrl, wall.TopRight, DetectWindowTimeoutMs, FullscreenDelayMs, BetweenLaunchMs, ProfileSwitch)
 OpenEdgeOnMonitor(edgePath, BottomLeftUrl, wall.BottomLeft, DetectWindowTimeoutMs, FullscreenDelayMs, BetweenLaunchMs, ProfileSwitch)
@@ -204,4 +204,26 @@ ArrayContains(arr, value) {
             return true
     }
     return false
+}
+
+ShowConfirmOnMonitor(monitor) {
+    gui := Gui("+AlwaysOnTop +ToolWindow -SysMenu")
+    gui.SetFont("s16 bold")
+    gui.AddText("w520 Center", "Completa il login nella finestra in alto a sinistra, poi premi OK per aprire automaticamente le altre tre finestre.")
+    okBtn := gui.AddButton("w160 h50 Default", "OK")
+
+    confirmed := false
+    okBtn.OnEvent("Click", (*) => (confirmed := true, gui.Destroy()))
+
+    gui.Show("AutoSize Hide")
+    gui.GetPos(, , &w, &h)
+    x := monitor.Left + Floor((monitor.Width - w) / 2)
+    y := monitor.Top + Floor((monitor.Height - h) / 2)
+    gui.Show(Format("x{} y{}", x, y))
+
+    while gui.Hwnd {
+        Sleep 50
+    }
+
+    return confirmed
 }

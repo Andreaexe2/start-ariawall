@@ -216,6 +216,7 @@ ShowConfirmOnMonitor(monitor) {
     okBtn.OnEvent("Click", (*) => (confirmed := true, gui.Destroy()))
 
     gui.Show("AutoSize Hide")
+    w := 0, h := 0
     gui.GetPos(, , &w, &h)
     x := monitor.Left + Floor((monitor.Width - w) / 2)
     y := monitor.Top + Floor((monitor.Height - h) / 2)

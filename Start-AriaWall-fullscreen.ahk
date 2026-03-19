@@ -128,7 +128,27 @@ SelectWallMonitors(monitors) {
 
 SortMonitors(arr, prop) {
     copy := arr.Clone()
-    copy.Sort((a, b, key) => (a[key] = b[key] ? 0 : (a[key] < b[key] ? -1 : 1)), prop)
+
+    len := copy.Length
+    if (len <= 1)
+        return copy
+
+    ; Simple bubble sort to avoid method issues on older runtimes
+    Loop len - 1 {
+        swapped := false
+        Loop len - A_Index {
+            j := A_Index
+            if (copy[j][prop] > copy[j + 1][prop]) {
+                tmp := copy[j]
+                copy[j] := copy[j + 1]
+                copy[j + 1] := tmp
+                swapped := true
+            }
+        }
+        if !swapped
+            break
+    }
+
     return copy
 }
 

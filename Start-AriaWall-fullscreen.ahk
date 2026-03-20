@@ -13,6 +13,8 @@ BottomRightUrl := "https://ws-wb1-i-wug01.infra.wetechs.priv/NmConsole/#v=Wug_vi
 
 KeepAliveIntervalMs := 300000     ; 5 minuti: intervallo per simulare attività e mantenere la sessione
 RefreshInKeepAlive := false       ; Se 'true' premerà F5 (aggiorna la pagina), se 'false' premerà F15 (solo per simulare presenza e non far scadere la sessione)
+WugKeepAliveIntervalMs := 180000  ; 3 minuti: keepalive dedicato a WhatsUp Gold
+WugRefreshEveryNTicks := 10       ; Ogni N tick WUG invia F5 (0 = mai)
 
 InitialDelayMs := 15000           ; wait before starting (OS/desktop ready)
 BetweenLaunchMs := 2000           ; pause between window launches
@@ -63,6 +65,7 @@ global HwndBR := OpenEdgeOnMonitor(edgePath, BottomRightUrl, wall.BottomRight, D
 
 ; Imposta un timer per mantenere vive le sessioni dei browser (solo Aria, non WUG)
 SetTimer KeepAliveTick, KeepAliveIntervalMs
+SetTimer KeepAliveWugTick, WugKeepAliveIntervalMs
 Persistent() ; Mantieni lo script in esecuzione dopo la fine della sezione principale
 
 KeepAliveTick() {
@@ -75,12 +78,10 @@ KeepAliveTick() {
     for _, hwnd in ariaWindows {
         if (hwnd && WinExist("ahk_id " hwnd)) {
             try {
-                WinActivate "ahk_id " hwnd
-                Sleep 100
                 if (RefreshInKeepAlive)
-                    Send "{F5}"  ; Aggiorna l'intera pagina
+                    ControlSend "{F5}",, "ahk_id " hwnd  ; Aggiorna l'intera pagina
                 else
-                    Send "{F15}" ; Tasto innocuo per dire "ci sono, non chiudere la sessione"
+                    ControlSend "{F15}",, "ahk_id " hwnd ; Tasto innocuo per dire "ci sono, non chiudere la sessione"
                 Sleep 200
             }
         }
@@ -88,6 +89,28 @@ KeepAliveTick() {
     
     ; Dopo il ciclo, volendo si può rimettere il focus all'ultima pagina (WUG), ma
     ; in assenza di iterazione manuale il wall resta visibile indipendentemente dal focus.
+}
+
+KeepAliveWugTick() {
+    global HwndBR, WugRefreshEveryNTicks
+    static tick := 0
+
+    if !(HwndBR && WinExist("ahk_id " HwndBR))
+        return
+
+    tick += 1
+
+    ; Keepalive leggero su WUG senza cambiare focus della finestra.
+    try {
+        ControlSend "{F15}",, "ahk_id " HwndBR
+    }
+
+    ; Refresh raro opzionale per evitare timeout lato server molto aggressivi.
+    if (WugRefreshEveryNTicks > 0 && Mod(tick, WugRefreshEveryNTicks) = 0) {
+        try {
+            ControlSend "{F5}",, "ahk_id " HwndBR
+        }
+    }
 }
 
 ; =========================================================

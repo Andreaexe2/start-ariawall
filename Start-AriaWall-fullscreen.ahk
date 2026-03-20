@@ -11,6 +11,9 @@ TopRightUrl := "https://aria.infra.wetechs.priv/vcf-operations/ui/inventory;mode
 BottomLeftUrl := "https://aria.infra.wetechs.priv/vcf-operations/ui/operations/dashboards;tabId=338e22d0-6d15-4145-872b-4cad1982c222"
 BottomRightUrl := "https://ws-wb1-i-wug01.infra.wetechs.priv/NmConsole/#v=Wug_view_nocviewer_NocViewer/p=%7B%22isMainView%22%3Atrue%2C%22DeckId%22%3A1%7D"
 
+KeepAliveIntervalMs := 300000     ; 5 minuti: intervallo per simulare attività e mantenere la sessione
+RefreshInKeepAlive := false       ; Se 'true' premerà F5 (aggiorna la pagina), se 'false' premerà F15 (solo per simulare presenza e non far scadere la sessione)
+
 InitialDelayMs := 15000           ; wait before starting (OS/desktop ready)
 BetweenLaunchMs := 2000           ; pause between window launches
 DetectWindowTimeoutMs := 15000    ; wait for Edge window creation
@@ -58,7 +61,27 @@ OpenEdgeOnMonitor(edgePath, TopRightUrl, wall.TopRight, DetectWindowTimeoutMs, F
 OpenEdgeOnMonitor(edgePath, BottomLeftUrl, wall.BottomLeft, DetectWindowTimeoutMs, FullscreenDelayMs, BetweenLaunchMs, ProfileSwitch)
 OpenEdgeOnMonitor(edgePath, BottomRightUrl, wall.BottomRight, DetectWindowTimeoutMs, FullscreenDelayMs, BetweenLaunchMs, ProfileSwitch)
 
-ExitApp
+; Imposta un timer per mantenere vive le sessioni dei browser
+SetTimer KeepAliveTick, KeepAliveIntervalMs
+Persistent() ; Mantieni lo script in esecuzione dopo la fine della sezione principale
+
+KeepAliveTick() {
+    global RefreshInKeepAlive
+    edges := WinGetList("ahk_exe msedge.exe")
+    
+    for _, hwnd in edges {
+        ; Attiva brevemente la finestra e invia l'input per simulare attività
+        try {
+            WinActivate "ahk_id " hwnd
+            Sleep 100
+            if (RefreshInKeepAlive)
+                Send "{F5}"  ; Aggiorna l'intera pagina
+            else
+                Send "{F15}" ; Tasto innocuo per dire "ci sono, non chiudere la sessione"
+            Sleep 200
+        }
+    }
+}
 
 ; =========================================================
 ; FUNCTIONS

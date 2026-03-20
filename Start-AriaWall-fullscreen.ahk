@@ -49,38 +49,45 @@ if (!wall) {
 ; FUTURE: chiusura preventiva di eventuali vecchie finestre del wall -> inserire qui una funzione dedicata.
 
 ; Open only the first window so the user can log in once.
-firstHwnd := OpenEdgeOnMonitor(edgePath, TopLeftUrl, wall.TopLeft, DetectWindowTimeoutMs, FullscreenDelayMs, BetweenLaunchMs, ProfileSwitch)
-if (!firstHwnd) {
+global HwndTL := OpenEdgeOnMonitor(edgePath, TopLeftUrl, wall.TopLeft, DetectWindowTimeoutMs, FullscreenDelayMs, BetweenLaunchMs, ProfileSwitch)
+if (!HwndTL) {
     MsgBox "Non sono riuscito ad aprire la finestra iniziale (alto sinistra)."
     ExitApp
 }
 
 ShowConfirmOnMonitor(wall.TopRight)
 
-OpenEdgeOnMonitor(edgePath, TopRightUrl, wall.TopRight, DetectWindowTimeoutMs, FullscreenDelayMs, BetweenLaunchMs, ProfileSwitch)
-OpenEdgeOnMonitor(edgePath, BottomLeftUrl, wall.BottomLeft, DetectWindowTimeoutMs, FullscreenDelayMs, BetweenLaunchMs, ProfileSwitch)
-OpenEdgeOnMonitor(edgePath, BottomRightUrl, wall.BottomRight, DetectWindowTimeoutMs, FullscreenDelayMs, BetweenLaunchMs, ProfileSwitch)
+global HwndTR := OpenEdgeOnMonitor(edgePath, TopRightUrl, wall.TopRight, DetectWindowTimeoutMs, FullscreenDelayMs, BetweenLaunchMs, ProfileSwitch)
+global HwndBL := OpenEdgeOnMonitor(edgePath, BottomLeftUrl, wall.BottomLeft, DetectWindowTimeoutMs, FullscreenDelayMs, BetweenLaunchMs, ProfileSwitch)
+global HwndBR := OpenEdgeOnMonitor(edgePath, BottomRightUrl, wall.BottomRight, DetectWindowTimeoutMs, FullscreenDelayMs, BetweenLaunchMs, ProfileSwitch)
 
-; Imposta un timer per mantenere vive le sessioni dei browser
+; Imposta un timer per mantenere vive le sessioni dei browser (solo Aria, non WUG)
 SetTimer KeepAliveTick, KeepAliveIntervalMs
 Persistent() ; Mantieni lo script in esecuzione dopo la fine della sezione principale
 
 KeepAliveTick() {
-    global RefreshInKeepAlive
-    edges := WinGetList("ahk_exe msedge.exe")
+    global RefreshInKeepAlive, HwndTL, HwndTR, HwndBL
     
-    for _, hwnd in edges {
-        ; Attiva brevemente la finestra e invia l'input per simulare attività
-        try {
-            WinActivate "ahk_id " hwnd
-            Sleep 100
-            if (RefreshInKeepAlive)
-                Send "{F5}"  ; Aggiorna l'intera pagina
-            else
-                Send "{F15}" ; Tasto innocuo per dire "ci sono, non chiudere la sessione"
-            Sleep 200
+    ; Array che contiene SOLO le schede di vRealize / Aria. 
+    ; Ignoriamo HwndBR (WUG) perché l'invio di comandi blocca il suo carousel o lo disconnette.
+    ariaWindows := [HwndTL, HwndTR, HwndBL]
+    
+    for _, hwnd in ariaWindows {
+        if (hwnd && WinExist("ahk_id " hwnd)) {
+            try {
+                WinActivate "ahk_id " hwnd
+                Sleep 100
+                if (RefreshInKeepAlive)
+                    Send "{F5}"  ; Aggiorna l'intera pagina
+                else
+                    Send "{F15}" ; Tasto innocuo per dire "ci sono, non chiudere la sessione"
+                Sleep 200
+            }
         }
     }
+    
+    ; Dopo il ciclo, volendo si può rimettere il focus all'ultima pagina (WUG), ma
+    ; in assenza di iterazione manuale il wall resta visibile indipendentemente dal focus.
 }
 
 ; =========================================================

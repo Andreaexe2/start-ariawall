@@ -11,6 +11,12 @@ TopRightUrl := "https://aria.infra.wetechs.priv/vcf-operations/ui/inventory;mode
 BottomLeftUrl := "https://aria.infra.wetechs.priv/vcf-operations/ui/operations/dashboards;tabId=338e22d0-6d15-4145-872b-4cad1982c222"
 BottomRightUrl := "https://ws-wb1-i-wug01.infra.wetechs.priv/NmConsole/#v=Wug_view_nocviewer_NocViewer/p=%7B%22isMainView%22%3Atrue%2C%22DeckId%22%3A1%7D"
 
+UseAmazingAutoRefresh := true    ; se true, attiva Amazing Auto Refresh su tutte le 4 finestre all'avvio
+AmazingShortcut := "^!r"         ; scorciatoia da impostare in Edge > estensioni > scorciatoie per Amazing Auto Refresh
+AmazingStartupDelayMs := 10000   ; attesa iniziale per far caricare le pagine prima di attivare l'estensione
+AmazingBetweenWindowsMs := 1200  ; pausa tra una finestra e l'altra durante l'attivazione
+
+EnableLegacyKeepAlive := false   ; fallback: usa i timer F15/F5 se non vuoi usare Amazing Auto Refresh
 KeepAliveIntervalMs := 300000     ; 5 minuti: intervallo per simulare attività e mantenere la sessione
 RefreshInKeepAlive := false       ; Se 'true' premerà F5 (aggiorna la pagina), se 'false' premerà F15 (solo per simulare presenza e non far scadere la sessione)
 WugKeepAliveIntervalMs := 180000  ; 3 minuti: keepalive dedicato a WhatsUp Gold
@@ -63,9 +69,16 @@ global HwndTR := OpenEdgeOnMonitor(edgePath, TopRightUrl, wall.TopRight, DetectW
 global HwndBL := OpenEdgeOnMonitor(edgePath, BottomLeftUrl, wall.BottomLeft, DetectWindowTimeoutMs, FullscreenDelayMs, BetweenLaunchMs, ProfileSwitch)
 global HwndBR := OpenEdgeOnMonitor(edgePath, BottomRightUrl, wall.BottomRight, DetectWindowTimeoutMs, FullscreenDelayMs, BetweenLaunchMs, ProfileSwitch)
 
-; Imposta un timer per mantenere vive le sessioni dei browser (solo Aria, non WUG)
-SetTimer KeepAliveTick, KeepAliveIntervalMs
-SetTimer KeepAliveWugTick, WugKeepAliveIntervalMs
+if (UseAmazingAutoRefresh) {
+    ApplyAmazingAutoRefresh([HwndTL, HwndTR, HwndBL, HwndBR], AmazingShortcut, AmazingStartupDelayMs, AmazingBetweenWindowsMs)
+}
+
+; Fallback opzionale se Amazing Auto Refresh non e' disponibile o non configurato.
+if (EnableLegacyKeepAlive) {
+    SetTimer KeepAliveTick, KeepAliveIntervalMs
+    SetTimer KeepAliveWugTick, WugKeepAliveIntervalMs
+}
+
 Persistent() ; Mantieni lo script in esecuzione dopo la fine della sezione principale
 
 KeepAliveTick() {
@@ -111,6 +124,28 @@ KeepAliveWugTick() {
             ControlSend "{F5}",, "ahk_id " HwndBR
         }
     }
+}
+
+ApplyAmazingAutoRefresh(hwndList, shortcut, startupDelayMs, betweenWindowsMs) {
+    if (shortcut = "")
+        return false
+
+    ; Aspetta che i contenuti web siano realmente pronti prima di inviare la scorciatoia.
+    Sleep startupDelayMs
+
+    for _, hwnd in hwndList {
+        if (hwnd && WinExist("ahk_id " hwnd)) {
+            try {
+                WinActivate "ahk_id " hwnd
+                WinWaitActive "ahk_id " hwnd, , 2
+                Sleep 150
+                Send shortcut
+                Sleep betweenWindowsMs
+            }
+        }
+    }
+
+    return true
 }
 
 ; =========================================================

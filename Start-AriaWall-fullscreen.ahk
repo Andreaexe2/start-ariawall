@@ -12,7 +12,10 @@ BottomLeftUrl := "https://aria.infra.wetechs.priv/vcf-operations/ui/operations/d
 BottomRightUrl := "https://ws-wb1-i-wug01.infra.wetechs.priv/NmConsole/#v=Wug_view_nocviewer_NocViewer/p=%7B%22isMainView%22%3Atrue%2C%22DeckId%22%3A1%7D"
 
 UseAmazingAutoRefresh := true    ; se true, attiva Amazing Auto Refresh su tutte le 4 finestre all'avvio
-AmazingShortcut := "^!r"         ; scorciatoia da impostare in Edge > estensioni > scorciatoie per Amazing Auto Refresh
+AmazingShortcut := "^!r"         ; scorciatoia comando "Start/Stop" di Amazing Auto Refresh
+AmazingPopupShortcut := "^!a"    ; scorciatoia comando "Open popup" di Amazing Auto Refresh
+AmazingIntervalSeconds := 420    ; 7 minuti: abbastanza frequente per evitare timeout, poco invasivo
+AmazingSetIntervalOnStartup := true ; prova a impostare automaticamente il timer all'avvio
 AmazingStartupDelayMs := 10000   ; attesa iniziale per far caricare le pagine prima di attivare l'estensione
 AmazingBetweenWindowsMs := 1200  ; pausa tra una finestra e l'altra durante l'attivazione
 
@@ -29,6 +32,7 @@ FullscreenDelayMs := 800          ; pause before sending F11
 
 ; FUTURE: dedicated Edge profile -> set ProfileSwitch below and keep it constant across all windows.
 ProfileSwitch := ""  ; e.g. "--profile-directory=AriaWall" or "--user-data-dir=C:\\AriaWallProfile"
+OpenInAppMode := false ; false = finestra Edge normale, true = app mode (--app)
 
 ; =========================================================
 ; MAIN
@@ -70,7 +74,15 @@ global HwndBL := OpenEdgeOnMonitor(edgePath, BottomLeftUrl, wall.BottomLeft, Det
 global HwndBR := OpenEdgeOnMonitor(edgePath, BottomRightUrl, wall.BottomRight, DetectWindowTimeoutMs, FullscreenDelayMs, BetweenLaunchMs, ProfileSwitch)
 
 if (UseAmazingAutoRefresh) {
-    ApplyAmazingAutoRefresh([HwndTL, HwndTR, HwndBL, HwndBR], AmazingShortcut, AmazingStartupDelayMs, AmazingBetweenWindowsMs)
+    ApplyAmazingAutoRefresh(
+        [HwndTL, HwndTR, HwndBL, HwndBR],
+        AmazingShortcut,
+        AmazingPopupShortcut,
+        AmazingIntervalSeconds,
+        AmazingSetIntervalOnStartup,
+        AmazingStartupDelayMs,
+        AmazingBetweenWindowsMs
+    )
 }
 
 ; Fallback opzionale se Amazing Auto Refresh non e' disponibile o non configurato.
@@ -126,8 +138,8 @@ KeepAliveWugTick() {
     }
 }
 
-ApplyAmazingAutoRefresh(hwndList, shortcut, startupDelayMs, betweenWindowsMs) {
-    if (shortcut = "")
+ApplyAmazingAutoRefresh(hwndList, shortcut, popupShortcut, intervalSeconds, setIntervalOnStartup, startupDelayMs, betweenWindowsMs) {
+    if (shortcut = "" && popupShortcut = "")
         return false
 
     ; Aspetta che i contenuti web siano realmente pronti prima di inviare la scorciatoia.
@@ -139,7 +151,24 @@ ApplyAmazingAutoRefresh(hwndList, shortcut, startupDelayMs, betweenWindowsMs) {
                 WinActivate "ahk_id " hwnd
                 WinWaitActive "ahk_id " hwnd, , 2
                 Sleep 150
-                Send shortcut
+
+                ; Opzionale: apre il popup dell'estensione e imposta il timer in secondi.
+                if (setIntervalOnStartup && popupShortcut != "") {
+                    Send popupShortcut
+                    Sleep 300
+                    Send "^a"
+                    Sleep 50
+                    Send intervalSeconds
+                    Sleep 50
+                    Send "{Enter}"
+                    Sleep 400
+                }
+
+                ; Avvio esplicito del refresh automatico nella pagina corrente.
+                if (shortcut != "") {
+                    Send shortcut
+                }
+
                 Sleep betweenWindowsMs
             }
         }
@@ -244,7 +273,10 @@ SortMonitors(arr, prop) {
 OpenEdgeOnMonitor(edgePath, url, monitor, detectTimeoutMs, fullscreenDelayMs, betweenLaunchMs, profileSwitch) {
     existing := WinGetList("ahk_exe msedge.exe")
 
-    runCmd := Format('"{1}" {2} --new-window --app="{3}"', edgePath, profileSwitch, url)
+    if (OpenInAppMode)
+        runCmd := Format('"{1}" {2} --new-window --app="{3}"', edgePath, profileSwitch, url)
+    else
+        runCmd := Format('"{1}" {2} --new-window "{3}"', edgePath, profileSwitch, url)
 
     ; FUTURE: verifica raggiungibilita' della pagina prima di aprire -> inserire check qui (HTTP ping) e gestire fallback.
     Run runCmd

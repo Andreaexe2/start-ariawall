@@ -31,7 +31,7 @@ DetectWindowTimeoutMs := 15000    ; wait for Edge window creation
 FullscreenDelayMs := 800          ; pause before sending F11
 
 ; FUTURE: dedicated Edge profile -> set ProfileSwitch below and keep it constant across all windows.
-ProfileSwitch := ""  ; e.g. "--profile-directory=AriaWall" or "--user-data-dir=C:\\AriaWallProfile"
+ProfileSwitch := '--user-data-dir="C:\MonitorWall\EdgeProfile"'
 OpenInAppMode := false ; false = finestra Edge normale, true = app mode (--app)
 
 ; =========================================================

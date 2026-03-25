@@ -192,11 +192,15 @@ OpenEdgeOnMonitor(edgePath, url, monitor, detectTimeoutMs, fullscreenDelayMs, be
     Sleep 400
 
     WinActivate "ahk_id " hwnd
+    WinWaitActive "ahk_id " hwnd, , 2 ; Aspetta fino a 2 secondi che la finestra sia attiva
     Sleep 300
 
     WinMaximize "ahk_id " hwnd
     Sleep fullscreenDelayMs
 
+    ; Assicuriamoci che la finestra sia ancora in primo piano prima di inviare F11
+    WinActivate "ahk_id " hwnd
+    Sleep 300
     Send "{F11}"
     Sleep betweenLaunchMs
 

@@ -23,12 +23,18 @@ if (-not $possibleAhkExe -or $possibleAhkExe.Count -eq 0) {
 }
 
 $ahkExe = $possibleAhkExe[0]
+$currentUser = "$env:USERDOMAIN\$env:USERNAME"
 
 $action = New-ScheduledTaskAction `
     -Execute $ahkExe `
     -Argument "`"$AhkScriptPath`""
 
-$trigger = New-ScheduledTaskTrigger -AtLogOn
+$trigger = New-ScheduledTaskTrigger -AtLogOn -User $currentUser
+
+$principal = New-ScheduledTaskPrincipal `
+    -UserId $currentUser `
+    -LogonType Interactive `
+    -RunLevel Limited
 
 $settings = New-ScheduledTaskSettingsSet `
     -AllowStartIfOnBatteries `
@@ -43,9 +49,11 @@ Register-ScheduledTask `
     -TaskName "AriaMonitorWallAHK" `
     -Action $action `
     -Trigger $trigger `
+    -Principal $principal `
     -Settings $settings `
     -Description "Avvia automaticamente il monitor wall Aria con AutoHotkey"
 
 Write-Host "Task creato: AriaMonitorWallAHK"
+Write-Host "Avvio: al logon utente ($currentUser)"
 Write-Host "Eseguibile AHK: $ahkExe"
 Write-Host "Script: $AhkScriptPath"

@@ -13,7 +13,7 @@ BottomRightUrl := "https://ws-wb1-i-wug01.infra.wetechs.priv/NmConsole/#v=Wug_vi
 InitialDelayMs := 5000
 BetweenLaunchMs := 300
 DetectWindowTimeoutMs := 5000
-FullscreenDelayMs := 200
+FullscreenDelayMs := 250
 
 ; =========================================================
 ; HOOK/MOD:
@@ -23,13 +23,17 @@ RequiredMonitorCount := 4
 MonitorPollIntervalMs := 2000
 MonitorWaitTimeoutMs := 60000   ; aspetta fino a 60 secondi
 
+; =========================================================
 ; HOOK/MOD:
 ; se vuoi cambiare profilo Edge, modifica solo questa riga
+; =========================================================
 ProfileSwitch := '--user-data-dir="C:\Users\ServiceDesk\Desktop\start-ariawall\EdgeProfile"'
 
+; =========================================================
 ; HOOK/MOD:
 ; false = finestra Edge normale
 ; true  = usa --app
+; =========================================================
 OpenInAppMode := false
 
 ; =========================================================
@@ -59,8 +63,9 @@ if (!HwndTL) {
     ExitApp
 }
 
-; 2) Mostro il popup sul monitor a destra per dare tempo al login
-ShowConfirmOnMonitor(wall.TopRight)
+; 2) Mostro il popup sul monitor a destra per dare tempo al login.
+; Non ruba il focus. Quando premi OK, rifisso la prima finestra.
+ShowConfirmOnMonitor(wall.TopRight, HwndTL, wall.TopLeft)
 
 ; 3) Dopo OK apro le altre 3 finestre
 global HwndTR := OpenEdgeOnMonitor(edgePath, TopRightUrl, wall.TopRight, DetectWindowTimeoutMs, FullscreenDelayMs, BetweenLaunchMs, ProfileSwitch)
@@ -214,6 +219,15 @@ OpenEdgeOnMonitor(edgePath, url, monitor, detectTimeoutMs, fullscreenDelayMs, be
     if (!hwnd)
         return 0
 
+    ForceWindowPlacementAndFullscreen(hwnd, monitor, fullscreenDelayMs, betweenLaunchMs)
+    return hwnd
+}
+
+ForceWindowPlacementAndFullscreen(hwnd, monitor, fullscreenDelayMs, betweenLaunchMs) {
+    if !(hwnd && WinExist("ahk_id " hwnd))
+        return false
+
+    ; primo allineamento
     WinRestore "ahk_id " hwnd
     Sleep 150
 
@@ -227,12 +241,31 @@ OpenEdgeOnMonitor(edgePath, url, monitor, detectTimeoutMs, fullscreenDelayMs, be
     WinMaximize "ahk_id " hwnd
     Sleep fullscreenDelayMs
 
+    ; primo tentativo F11
     WinActivate "ahk_id " hwnd
     Sleep 150
     Send "{F11}"
-    Sleep betweenLaunchMs
+    Sleep 350
 
-    return hwnd
+    ; secondo passaggio: se la finestra non copre il monitor, la riforzo
+    WinGetPos(&x, &y, &w, &h, "ahk_id " hwnd)
+
+    if (x != monitor.Left || y != monitor.Top || w < monitor.Width || h < monitor.Height) {
+        WinRestore "ahk_id " hwnd
+        Sleep 150
+        WinMove monitor.Left, monitor.Top, monitor.Width, monitor.Height, "ahk_id " hwnd
+        Sleep 250
+        WinActivate "ahk_id " hwnd
+        WinWaitActive "ahk_id " hwnd, , 2
+        Sleep 150
+        WinMaximize "ahk_id " hwnd
+        Sleep fullscreenDelayMs
+        Send "{F11}"
+        Sleep 350
+    }
+
+    Sleep betweenLaunchMs
+    return true
 }
 
 WaitForNewEdgeWindow(existingList, timeoutMs) {
@@ -262,13 +295,17 @@ ArrayContains(arr, value) {
     return false
 }
 
-ShowConfirmOnMonitor(monitor) {
+ShowConfirmOnMonitor(monitor, firstHwnd, firstMonitor) {
     myGui := Gui("+AlwaysOnTop +ToolWindow -SysMenu")
     myGui.SetFont("s16 bold")
     myGui.AddText("w560 Center", "Completa il login nella finestra in alto a sinistra, poi premi OK per aprire automaticamente le altre tre finestre.")
 
     okBtn := myGui.AddButton("w160 h50 Default", "OK")
-    okBtn.OnEvent("Click", (*) => myGui.Destroy())
+    okBtn.OnEvent("Click", (*) => (
+        ; prima di chiudere il popup, riforza la prima finestra
+        ForceWindowPlacementAndFullscreen(firstHwnd, firstMonitor, 250, 100),
+        myGui.Destroy()
+    ))
 
     myGui.Show("AutoSize Hide")
 

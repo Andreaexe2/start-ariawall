@@ -37,9 +37,9 @@ if (edgePath = "") {
 }
 
 monitors := GetMonitorList()
-if (monitors.Length < 4) {
-    MsgBox "Servono almeno 4 monitor. Rilevati: " monitors.Length
-    ExitApp
+while (monitors.Length < 4) {
+    Sleep 5000 ; Attende 5 secondi e riprova
+    monitors := GetMonitorList()
 }
 
 wall := SelectWallMonitors(monitors)

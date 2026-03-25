@@ -10,10 +10,18 @@ TopRightUrl := "https://aria.infra.wetechs.priv/vcf-operations/ui/inventory;mode
 BottomLeftUrl := "https://aria.infra.wetechs.priv/vcf-operations/ui/operations/dashboards;tabId=338e22d0-6d15-4145-872b-4cad1982c222"
 BottomRightUrl := "https://ws-wb1-i-wug01.infra.wetechs.priv/NmConsole/#v=Wug_view_nocviewer_NocViewer/p=%7B%22isMainView%22%3Atrue%2C%22DeckId%22%3A1%7D"
 
-InitialDelayMs := 3000
+InitialDelayMs := 5000
 BetweenLaunchMs := 300
 DetectWindowTimeoutMs := 5000
 FullscreenDelayMs := 200
+
+; =========================================================
+; HOOK/MOD:
+; attesa monitor reali all'avvio
+; =========================================================
+RequiredMonitorCount := 4
+MonitorPollIntervalMs := 2000
+MonitorWaitTimeoutMs := 60000   ; aspetta fino a 60 secondi
 
 ; HOOK/MOD:
 ; se vuoi cambiare profilo Edge, modifica solo questa riga
@@ -36,7 +44,11 @@ if (edgePath = "") {
     ExitApp
 }
 
-monitors := GetMonitorList()
+monitors := WaitForRequiredMonitors(RequiredMonitorCount, MonitorWaitTimeoutMs, MonitorPollIntervalMs)
+
+if (monitors.Length < RequiredMonitorCount) {
+    MsgBox "Dopo l'attesa Windows vede ancora solo " monitors.Length " monitor. Procedo comunque, ma il posizionamento potrebbe essere errato."
+}
 
 wall := SelectWallMonitors(monitors)
 
@@ -75,6 +87,22 @@ GetEdgePath() {
     return ""
 }
 
+WaitForRequiredMonitors(requiredCount, timeoutMs, pollIntervalMs) {
+    start := A_TickCount
+    lastList := GetMonitorList()
+
+    while ((A_TickCount - start) < timeoutMs) {
+        lastList := GetMonitorList()
+
+        if (lastList.Length >= requiredCount)
+            return lastList
+
+        Sleep pollIntervalMs
+    }
+
+    return lastList
+}
+
 GetMonitorList() {
     count := MonitorGetCount()
     list := []
@@ -99,12 +127,13 @@ GetMonitorList() {
 
 SelectWallMonitors(monitors) {
     sortedByX := SortMonitors(monitors, "Left")
-    
-    ; Se ci sono meno di 4 monitor, usiamo quelli disponibili come fallback
+
+    ; fallback: se ci sono meno di 4 monitor, usa quelli disponibili
     if (sortedByX.Length < 4) {
         m1 := sortedByX.Length >= 1 ? sortedByX[1] : {Left: 0, Top: 0, Width: 1920, Height: 1080}
         m2 := sortedByX.Length >= 2 ? sortedByX[2] : m1
         m3 := sortedByX.Length >= 3 ? sortedByX[3] : m1
+
         return {
             TopLeft: m1,
             TopRight: m2,
@@ -113,7 +142,7 @@ SelectWallMonitors(monitors) {
         }
     }
 
-    ; Prende i 4 monitor piu' a destra
+    ; prende i 4 monitor piu' a destra
     startIdx := sortedByX.Length - 3
     rightCluster := []
 
@@ -121,12 +150,12 @@ SelectWallMonitors(monitors) {
         rightCluster.Push(sortedByX[startIdx + A_Index - 1])
     }
 
-    ; Divide in alto/basso
+    ; divide in alto/basso
     sortedByY := SortMonitors(rightCluster, "Top")
     topTwo := [sortedByY[1], sortedByY[2]]
     bottomTwo := [sortedByY[3], sortedByY[4]]
 
-    ; Divide in sinistra/destra
+    ; divide in sinistra/destra
     topSorted := SortMonitors(topTwo, "Left")
     bottomSorted := SortMonitors(bottomTwo, "Left")
 
@@ -186,21 +215,20 @@ OpenEdgeOnMonitor(edgePath, url, monitor, detectTimeoutMs, fullscreenDelayMs, be
         return 0
 
     WinRestore "ahk_id " hwnd
-    Sleep 200
+    Sleep 150
 
     WinMove monitor.Left, monitor.Top, monitor.Width, monitor.Height, "ahk_id " hwnd
-    Sleep 400
+    Sleep 250
 
     WinActivate "ahk_id " hwnd
-    WinWaitActive "ahk_id " hwnd, , 2 ; Aspetta fino a 2 secondi che la finestra sia attiva
-    Sleep 300
+    WinWaitActive "ahk_id " hwnd, , 2
+    Sleep 150
 
     WinMaximize "ahk_id " hwnd
     Sleep fullscreenDelayMs
 
-    ; Assicuriamoci che la finestra sia ancora in primo piano prima di inviare F11
     WinActivate "ahk_id " hwnd
-    Sleep 300
+    Sleep 150
     Send "{F11}"
     Sleep betweenLaunchMs
 
@@ -220,7 +248,7 @@ WaitForNewEdgeWindow(existingList, timeoutMs) {
             }
         }
 
-        Sleep 250
+        Sleep 200
     }
 
     return 0
@@ -250,7 +278,7 @@ ShowConfirmOnMonitor(monitor) {
     xPos := monitor.Left + Floor((monitor.Width - wOut) / 2)
     yPos := monitor.Top + Floor((monitor.Height - hOut) / 2)
 
-    ; Mostra il popup SENZA rubare il focus alla finestra Edge
+    ; mostra il popup senza rubare il focus alla finestra Edge
     myGui.Show(Format("x{} y{} NoActivate", xPos, yPos))
 
     WinWaitClose("ahk_id " myGui.Hwnd)

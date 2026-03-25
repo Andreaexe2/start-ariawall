@@ -52,11 +52,18 @@ if (!edgePath) {
     ExitApp
 }
 
-monitors := GetMonitorList()
-wall := SelectWallMonitors(monitors)
+; Attendi finché non vengono rilevati i monitor (timeout ~60 secondi = 60 tentativi)
+wall := 0
+Loop 60 {
+    monitors := GetMonitorList()
+    wall := SelectWallMonitors(monitors)
+    if (wall)
+        break
+    Sleep 1000
+}
 
 if (!wall) {
-    MsgBox "Non sono riuscito a determinare i 4 monitor principali del wall."
+    MsgBox "Non sono riuscito a determinare i 4 monitor principali del wall dopo vari tentativi. Verifica i collegamenti."
     ExitApp
 }
 

@@ -10,10 +10,10 @@ TopRightUrl := "https://aria.infra.wetechs.priv/vcf-operations/ui/inventory;mode
 BottomLeftUrl := "https://aria.infra.wetechs.priv/vcf-operations/ui/operations/dashboards;tabId=338e22d0-6d15-4145-872b-4cad1982c222"
 BottomRightUrl := "https://ws-wb1-i-wug01.infra.wetechs.priv/NmConsole/#v=Wug_view_nocviewer_NocViewer/p=%7B%22isMainView%22%3Atrue%2C%22DeckId%22%3A1%7D"
 
-InitialDelayMs := 15000
-BetweenLaunchMs := 2000
-DetectWindowTimeoutMs := 15000
-FullscreenDelayMs := 800
+InitialDelayMs := 3000
+BetweenLaunchMs := 300
+DetectWindowTimeoutMs := 5000
+FullscreenDelayMs := 200
 
 ; HOOK/MOD:
 ; se vuoi cambiare profilo Edge, modifica solo questa riga
@@ -242,7 +242,9 @@ ShowConfirmOnMonitor(monitor) {
 
     xPos := monitor.Left + Floor((monitor.Width - wOut) / 2)
     yPos := monitor.Top + Floor((monitor.Height - hOut) / 2)
-    myGui.Show(Format("x{} y{}", xPos, yPos))
+
+    ; Mostra il popup SENZA rubare il focus alla finestra Edge
+    myGui.Show(Format("x{} y{} NoActivate", xPos, yPos))
 
     WinWaitClose("ahk_id " myGui.Hwnd)
     return true

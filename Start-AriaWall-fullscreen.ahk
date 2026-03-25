@@ -21,8 +21,8 @@ FullscreenDelayMs := 300
 ; =========================================================
 RequiredMonitorCount := 4
 MonitorPollIntervalMs := 2000
-MonitorWaitTimeoutMs := 90000     ; fino a 90 secondi
-StablePollsRequired := 2          ; deve vedere la stessa topologia per 2 controlli consecutivi
+MonitorWaitTimeoutMs := 90000
+StablePollsRequired := 2
 
 ; =========================================================
 ; HOOK/MOD:
@@ -107,7 +107,7 @@ WaitForStableMonitorTopology(requiredCount, timeoutMs, pollIntervalMs, stablePol
         lastList := GetMonitorList()
 
         if (lastList.Length >= requiredCount) {
-            candidate := GetLargestMonitors(lastList, 4)
+            candidate := GetRightmostMonitors(lastList, 4)
             sig := BuildMonitorSignature(candidate)
 
             if (sig != "" && sig = lastSig) {
@@ -163,8 +163,8 @@ GetMonitorList() {
     return list
 }
 
-GetLargestMonitors(monitors, howMany) {
-    sorted := SortMonitors(monitors, "Area", true)
+GetRightmostMonitors(monitors, howMany) {
+    sorted := SortMonitors(monitors, "Left", true)
     result := []
 
     limit := Min(howMany, sorted.Length)
@@ -179,12 +179,11 @@ SelectWallMonitors(monitors) {
     if (monitors.Length < 4)
         return 0
 
-    ; Prendo i 4 monitor piu' grandi per escludere quello piccolo
-    wallCandidates := GetLargestMonitors(monitors, 4)
+    ; Prende i 4 monitor più a destra, escludendo quello piccolo a sinistra
+    wallCandidates := GetRightmostMonitors(monitors, 4)
     if (wallCandidates.Length < 4)
         return 0
 
-    ; Ordino i 4 monitor del wall per Top/Left
     sortedByTop := SortMonitors(wallCandidates, "Top", false)
 
     topTwo := [sortedByTop[1], sortedByTop[2]]
@@ -270,7 +269,6 @@ WaitForEdgeWindow(existingList, pid, timeoutMs) {
     start := A_TickCount
 
     while (A_TickCount - start < timeoutMs) {
-        ; Primo tentativo: finestra del PID appena lanciato
         if (pid) {
             byPid := WinGetList("ahk_pid " pid)
             for _, hwnd in byPid {
@@ -279,7 +277,6 @@ WaitForEdgeWindow(existingList, pid, timeoutMs) {
             }
         }
 
-        ; Fallback: nuova finestra Edge rispetto alla lista iniziale
         current := WinGetList("ahk_exe msedge.exe")
         for _, hwnd in current {
             if (!ArrayContains(existingList, hwnd) && IsUsableEdgeWindow(hwnd))
@@ -298,7 +295,6 @@ IsUsableEdgeWindow(hwnd) {
         if (class != "Chrome_WidgetWin_1")
             return false
 
-        ; Anche se il titolo e' ancora vuoto, la finestra e' comunque valida se la classe e' giusta
         return true
     } catch {
         return false
@@ -309,7 +305,6 @@ ForceWindowPlacementAndFullscreen(hwnd, monitor, fullscreenDelayMs, betweenLaunc
     if !(hwnd && WinExist("ahk_id " hwnd))
         return false
 
-    ; Primo tentativo
     WinRestore "ahk_id " hwnd
     Sleep 150
 
@@ -328,7 +323,6 @@ ForceWindowPlacementAndFullscreen(hwnd, monitor, fullscreenDelayMs, betweenLaunc
     SendEvent "{F11}"
     Sleep 350
 
-    ; Verifica e secondo tentativo se necessario
     WinGetPos(&x, &y, &w, &h, "ahk_id " hwnd)
 
     if (x != monitor.Left || y != monitor.Top || w < monitor.Width || h < monitor.Height) {
@@ -364,7 +358,6 @@ ShowConfirmOnMonitor(monitor, firstHwnd, firstMonitor) {
 
     okBtn := myGui.AddButton("w160 h50 Default", "OK")
     okBtn.OnEvent("Click", (*) => (
-        ; Al click su OK, riforzo la prima finestra sul monitor giusto e in fullscreen
         ForceWindowPlacementAndFullscreen(firstHwnd, firstMonitor, 250, 100),
         myGui.Destroy()
     ))
@@ -377,7 +370,6 @@ ShowConfirmOnMonitor(monitor, firstHwnd, firstMonitor) {
     xPos := monitor.Left + Floor((monitor.Width - wOut) / 2)
     yPos := monitor.Top + Floor((monitor.Height - hOut) / 2)
 
-    ; Mostra il popup senza rubare il focus alla finestra Edge
     myGui.Show(Format("x{} y{} NoActivate", xPos, yPos))
 
     WinWaitClose("ahk_id " myGui.Hwnd)

@@ -1,5 +1,6 @@
 #Requires AutoHotkey v2.0
 #SingleInstance Force
+#Persistent
 
 ; =========================================================
 ; CONFIG
@@ -11,28 +12,34 @@ TopRightUrl := "https://aria.infra.wetechs.priv/vcf-operations/ui/inventory;mode
 BottomLeftUrl := "https://aria.infra.wetechs.priv/vcf-operations/ui/operations/dashboards;tabId=338e22d0-6d15-4145-872b-4cad1982c222"
 BottomRightUrl := "https://ws-wb1-i-wug01.infra.wetechs.priv/NmConsole/#v=Wug_view_nocviewer_NocViewer/p=%7B%22isMainView%22%3Atrue%2C%22DeckId%22%3A1%7D"
 
-UseAmazingAutoRefresh := true    ; se true, attiva Amazing Auto Refresh su tutte le 4 finestre all'avvio
-AmazingShortcut := "^!r"         ; scorciatoia comando "Start/Stop" di Amazing Auto Refresh
-AmazingPopupShortcut := "^!a"    ; scorciatoia comando "Open popup" di Amazing Auto Refresh
-AmazingIntervalSeconds := 420    ; 7 minuti: abbastanza frequente per evitare timeout, poco invasivo
-AmazingSetIntervalOnStartup := true ; prova a impostare automaticamente il timer all'avvio
-AmazingStartupDelayMs := 10000   ; attesa iniziale per far caricare le pagine prima di attivare l'estensione
-AmazingBetweenWindowsMs := 1200  ; pausa tra una finestra e l'altra durante l'attivazione
+UseAmazingAutoRefresh := true
+AmazingShortcut := "^!r"
+AmazingPopupShortcut := "^!a"
+AmazingIntervalSeconds := 420
+AmazingSetIntervalOnStartup := true
+AmazingStartupDelayMs := 10000
+AmazingBetweenWindowsMs := 1200
 
-EnableLegacyKeepAlive := false   ; fallback: usa i timer F15/F5 se non vuoi usare Amazing Auto Refresh
-KeepAliveIntervalMs := 300000     ; 5 minuti: intervallo per simulare attività e mantenere la sessione
-RefreshInKeepAlive := false       ; Se 'true' premerà F5 (aggiorna la pagina), se 'false' premerà F15 (solo per simulare presenza e non far scadere la sessione)
-WugKeepAliveIntervalMs := 180000  ; 3 minuti: keepalive dedicato a WhatsUp Gold
-WugRefreshEveryNTicks := 10       ; Ogni N tick WUG invia F5 (0 = mai)
+EnableLegacyKeepAlive := false
+KeepAliveIntervalMs := 300000
+RefreshInKeepAlive := false
+WugKeepAliveIntervalMs := 180000
+WugRefreshEveryNTicks := 10
 
-InitialDelayMs := 3000            ; wait before starting (OS/desktop ready)
-BetweenLaunchMs := 700            ; pause between window launches
-DetectWindowTimeoutMs := 15000    ; wait for Edge window creation
-FullscreenDelayMs := 300          ; pause before sending F11
+InitialDelayMs := 3000
+BetweenLaunchMs := 700
+DetectWindowTimeoutMs := 15000
+FullscreenDelayMs := 300
 
 ; FUTURE: dedicated Edge profile -> set ProfileSwitch below and keep it constant across all windows.
 ProfileSwitch := '--user-data-dir="C:\MonitorWall\EdgeProfile"'
 OpenInAppMode := false ; false = finestra Edge normale, true = app mode (--app)
+
+; Handle global finestra
+HwndTL := 0
+HwndTR := 0
+HwndBL := 0
+HwndBR := 0
 
 ; =========================================================
 ; MAIN
@@ -41,13 +48,23 @@ OpenInAppMode := false ; false = finestra Edge normale, true = app mode (--app)
 Sleep InitialDelayMs
 
 edgePath := GetEdgePath()
+if (!edgePath) {
+    MsgBox "Microsoft Edge non è stato trovato nei percorsi previsti."
+    ExitApp
+}
+
 monitors := GetMonitorList()
 wall := SelectWallMonitors(monitors)
+
+if (!wall) {
+    MsgBox "Non sono riuscito a determinare i 4 monitor principali del wall."
+    ExitApp
+}
 
 ; FUTURE: chiusura preventiva di eventuali vecchie finestre del wall -> inserire qui una funzione dedicata.
 
 ; Open only the first window so the user can log in once.
-global HwndTL := OpenEdgeOnMonitor(edgePath, TopLeftUrl, wall.TopLeft, DetectWindowTimeoutMs, FullscreenDelayMs, BetweenLaunchMs, ProfileSwitch)
+HwndTL := OpenEdgeOnMonitor(edgePath, TopLeftUrl, wall.TopLeft, DetectWindowTimeoutMs, FullscreenDelayMs, BetweenLaunchMs, ProfileSwitch)
 if (!HwndTL) {
     MsgBox "Non sono riuscito ad aprire la finestra iniziale (alto sinistra)."
     ExitApp
@@ -55,9 +72,9 @@ if (!HwndTL) {
 
 ShowConfirmOnMonitor(wall.TopRight)
 
-global HwndTR := OpenEdgeOnMonitor(edgePath, TopRightUrl, wall.TopRight, DetectWindowTimeoutMs, FullscreenDelayMs, BetweenLaunchMs, ProfileSwitch)
-global HwndBL := OpenEdgeOnMonitor(edgePath, BottomLeftUrl, wall.BottomLeft, DetectWindowTimeoutMs, FullscreenDelayMs, BetweenLaunchMs, ProfileSwitch)
-global HwndBR := OpenEdgeOnMonitor(edgePath, BottomRightUrl, wall.BottomRight, DetectWindowTimeoutMs, FullscreenDelayMs, BetweenLaunchMs, ProfileSwitch)
+HwndTR := OpenEdgeOnMonitor(edgePath, TopRightUrl, wall.TopRight, DetectWindowTimeoutMs, FullscreenDelayMs, BetweenLaunchMs, ProfileSwitch)
+HwndBL := OpenEdgeOnMonitor(edgePath, BottomLeftUrl, wall.BottomLeft, DetectWindowTimeoutMs, FullscreenDelayMs, BetweenLaunchMs, ProfileSwitch)
+HwndBR := OpenEdgeOnMonitor(edgePath, BottomRightUrl, wall.BottomRight, DetectWindowTimeoutMs, FullscreenDelayMs, BetweenLaunchMs, ProfileSwitch)
 
 if (UseAmazingAutoRefresh) {
     ApplyAmazingAutoRefresh(
@@ -77,12 +94,12 @@ if (EnableLegacyKeepAlive) {
     SetTimer KeepAliveWugTick, WugKeepAliveIntervalMs
 }
 
-Persistent() ; Mantieni lo script in esecuzione dopo la fine della sezione principale
+return
 
 KeepAliveTick() {
     global RefreshInKeepAlive, HwndTL, HwndTR, HwndBL
     
-    ; Array che contiene SOLO le schede di vRealize / Aria. 
+    ; Array che contiene SOLO le schede di vRealize / Aria.
     ; Ignoriamo HwndBR (WUG) perché l'invio di comandi blocca il suo carousel o lo disconnette.
     ariaWindows := [HwndTL, HwndTR, HwndBL]
     
@@ -90,9 +107,9 @@ KeepAliveTick() {
         if (hwnd && WinExist("ahk_id " hwnd)) {
             try {
                 if (RefreshInKeepAlive)
-                    ControlSend "{F5}",, "ahk_id " hwnd  ; Aggiorna l'intera pagina
+                    ControlSend "{F5}",, "ahk_id " hwnd
                 else
-                    ControlSend "{F15}",, "ahk_id " hwnd ; Tasto innocuo per dire "ci sono, non chiudere la sessione"
+                    ControlSend "{F15}",, "ahk_id " hwnd
                 Sleep 200
             }
         }
@@ -238,10 +255,11 @@ SortMonitors(arr, prop) {
 
     ; Simple bubble sort to avoid method issues on older runtimes
     Loop len - 1 {
+        outerIndex := A_Index
         swapped := false
-        Loop len - A_Index {
+
+        Loop len - outerIndex {
             j := A_Index
-            ; use dynamic property access via .%prop% to avoid __Item/_item errors
             if (copy[j].%prop% > copy[j + 1].%prop%) {
                 tmp := copy[j]
                 copy[j] := copy[j + 1]
@@ -249,6 +267,7 @@ SortMonitors(arr, prop) {
                 swapped := true
             }
         }
+
         if !swapped
             break
     }
@@ -257,6 +276,8 @@ SortMonitors(arr, prop) {
 }
 
 OpenEdgeOnMonitor(edgePath, url, monitor, detectTimeoutMs, fullscreenDelayMs, betweenLaunchMs, profileSwitch) {
+    global OpenInAppMode
+
     existing := WinGetList("ahk_exe msedge.exe")
 
     if (OpenInAppMode)

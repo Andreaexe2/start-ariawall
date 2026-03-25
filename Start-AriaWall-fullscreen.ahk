@@ -41,22 +41,8 @@ OpenInAppMode := false ; false = finestra Edge normale, true = app mode (--app)
 Sleep InitialDelayMs
 
 edgePath := GetEdgePath()
-if (edgePath = "") {
-    MsgBox "Microsoft Edge non trovato."
-    ExitApp
-}
-
 monitors := GetMonitorList()
-if (monitors.Length < 4) {
-    MsgBox "Servono almeno 4 monitor. Rilevati: " monitors.Length
-    ExitApp
-}
-
 wall := SelectWallMonitors(monitors)
-if (!wall) {
-    MsgBox "Impossibile identificare i 4 monitor del wall (piu' a destra)."
-    ExitApp
-}
 
 ; FUTURE: chiusura preventiva di eventuali vecchie finestre del wall -> inserire qui una funzione dedicata.
 

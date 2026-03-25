@@ -20,7 +20,8 @@ FullscreenDelayMs := 800
 ProfileSwitch := '--user-data-dir="C:\Users\ServiceDesk\Desktop\start-ariawall\EdgeProfile"'
 
 ; HOOK/MOD:
-; lascia false per usare finestre Edge normali
+; false = finestra Edge normale
+; true  = usa --app
 OpenInAppMode := false
 
 ; =========================================================
@@ -47,10 +48,20 @@ if (!wall) {
     ExitApp
 }
 
-OpenEdgeOnMonitor(edgePath, TopLeftUrl, wall.TopLeft, DetectWindowTimeoutMs, FullscreenDelayMs, BetweenLaunchMs, ProfileSwitch)
-OpenEdgeOnMonitor(edgePath, TopRightUrl, wall.TopRight, DetectWindowTimeoutMs, FullscreenDelayMs, BetweenLaunchMs, ProfileSwitch)
-OpenEdgeOnMonitor(edgePath, BottomLeftUrl, wall.BottomLeft, DetectWindowTimeoutMs, FullscreenDelayMs, BetweenLaunchMs, ProfileSwitch)
-OpenEdgeOnMonitor(edgePath, BottomRightUrl, wall.BottomRight, DetectWindowTimeoutMs, FullscreenDelayMs, BetweenLaunchMs, ProfileSwitch)
+; 1) Apro solo la finestra in alto a sinistra
+global HwndTL := OpenEdgeOnMonitor(edgePath, TopLeftUrl, wall.TopLeft, DetectWindowTimeoutMs, FullscreenDelayMs, BetweenLaunchMs, ProfileSwitch)
+if (!HwndTL) {
+    MsgBox "Non sono riuscito ad aprire la finestra iniziale (alto sinistra)."
+    ExitApp
+}
+
+; 2) Mostro il popup sul monitor a destra per dare tempo al login
+ShowConfirmOnMonitor(wall.TopRight)
+
+; 3) Dopo OK apro le altre 3 finestre
+global HwndTR := OpenEdgeOnMonitor(edgePath, TopRightUrl, wall.TopRight, DetectWindowTimeoutMs, FullscreenDelayMs, BetweenLaunchMs, ProfileSwitch)
+global HwndBL := OpenEdgeOnMonitor(edgePath, BottomLeftUrl, wall.BottomLeft, DetectWindowTimeoutMs, FullscreenDelayMs, BetweenLaunchMs, ProfileSwitch)
+global HwndBR := OpenEdgeOnMonitor(edgePath, BottomRightUrl, wall.BottomRight, DetectWindowTimeoutMs, FullscreenDelayMs, BetweenLaunchMs, ProfileSwitch)
 
 ExitApp
 
@@ -160,8 +171,6 @@ OpenEdgeOnMonitor(edgePath, url, monitor, detectTimeoutMs, fullscreenDelayMs, be
 
     existing := WinGetList("ahk_exe msedge.exe")
 
-    ; HOOK/MOD:
-    ; qui puoi cambiare tra finestra normale e app mode
     if (OpenInAppMode)
         runCmd := Format('"{1}" {2} --new-window --app="{3}"', edgePath, profileSwitch, url)
     else
@@ -216,4 +225,25 @@ ArrayContains(arr, value) {
             return true
     }
     return false
+}
+
+ShowConfirmOnMonitor(monitor) {
+    myGui := Gui("+AlwaysOnTop +ToolWindow -SysMenu")
+    myGui.SetFont("s16 bold")
+    myGui.AddText("w560 Center", "Completa il login nella finestra in alto a sinistra, poi premi OK per aprire automaticamente le altre tre finestre.")
+
+    okBtn := myGui.AddButton("w160 h50 Default", "OK")
+    okBtn.OnEvent("Click", (*) => myGui.Destroy())
+
+    myGui.Show("AutoSize Hide")
+
+    xOut := 0, yOut := 0, wOut := 0, hOut := 0
+    myGui.GetPos(&xOut, &yOut, &wOut, &hOut)
+
+    xPos := monitor.Left + Floor((monitor.Width - wOut) / 2)
+    yPos := monitor.Top + Floor((monitor.Height - hOut) / 2)
+    myGui.Show(Format("x{} y{}", xPos, yPos))
+
+    WinWaitClose("ahk_id " myGui.Hwnd)
+    return true
 }

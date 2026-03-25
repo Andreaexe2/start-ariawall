@@ -11,28 +11,43 @@ TopRightUrl := "https://aria.infra.wetechs.priv/vcf-operations/ui/inventory;mode
 BottomLeftUrl := "https://aria.infra.wetechs.priv/vcf-operations/ui/operations/dashboards;tabId=338e22d0-6d15-4145-872b-4cad1982c222"
 BottomRightUrl := "https://ws-wb1-i-wug01.infra.wetechs.priv/NmConsole/#v=Wug_view_nocviewer_NocViewer/p=%7B%22isMainView%22%3Atrue%2C%22DeckId%22%3A1%7D"
 
-UseAmazingAutoRefresh := true    ; se true, attiva Amazing Auto Refresh su tutte le 4 finestre all'avvio
-AmazingShortcut := "^!r"         ; scorciatoia comando "Start/Stop" di Amazing Auto Refresh
-AmazingPopupShortcut := "^!a"    ; scorciatoia comando "Open popup" di Amazing Auto Refresh
-AmazingIntervalSeconds := 420    ; 7 minuti: abbastanza frequente per evitare timeout, poco invasivo
-AmazingSetIntervalOnStartup := true ; prova a impostare automaticamente il timer all'avvio
-AmazingStartupDelayMs := 10000   ; attesa iniziale per far caricare le pagine prima di attivare l'estensione
-AmazingBetweenWindowsMs := 1200  ; pausa tra una finestra e l'altra durante l'attivazione
+; =========================================================
+; HOOK / MOD: Amazing Auto Refresh
+; Lo script apre il popup dell'estensione, imposta il timer,
+; tabba fino a START e lo preme su tutte le 4 finestre.
+; =========================================================
+UseAmazingAutoRefresh := true
+AmazingPopupShortcut := "^!a"        ; Edge -> extensions shortcuts -> Open popup
+AmazingIntervalSeconds := 420        ; 7 minuti
+AmazingSetIntervalOnStartup := true
+AmazingStartupDelayMs := 12000
+AmazingBetweenWindowsMs := 1500
+AmazingPopupOpenDelayMs := 700
+AmazingKeyDelayMs := 80
+AmazingTabToStartCount := 11         ; se non parte, prova 10 o 12
+AmazingReEnterFullscreen := true
 
-EnableLegacyKeepAlive := false   ; fallback: usa i timer F15/F5 se non vuoi usare Amazing Auto Refresh
-KeepAliveIntervalMs := 300000     ; 5 minuti: intervallo per simulare attività e mantenere la sessione
-RefreshInKeepAlive := false       ; Se 'true' premerà F5 (aggiorna la pagina), se 'false' premerà F15 (solo per simulare presenza e non far scadere la sessione)
-WugKeepAliveIntervalMs := 180000  ; 3 minuti: keepalive dedicato a WhatsUp Gold
-WugRefreshEveryNTicks := 10       ; Ogni N tick WUG invia F5 (0 = mai)
+; =========================================================
+; HOOK / MOD: fallback keepalive
+; Tiene viva la sessione anche se l'estensione non parte su una finestra
+; =========================================================
+EnableLegacyKeepAlive := true
+KeepAliveIntervalMs := 240000        ; 4 minuti
+RefreshInKeepAlive := false          ; false = F15 leggero, true = F5 pesante
+WugKeepAliveIntervalMs := 180000     ; 3 minuti
+WugRefreshEveryNTicks := 10          ; ogni 10 tick WUG fa F5
 
-InitialDelayMs := 15000           ; wait before starting (OS/desktop ready)
-BetweenLaunchMs := 2000           ; pause between window launches
-DetectWindowTimeoutMs := 15000    ; wait for Edge window creation
-FullscreenDelayMs := 800          ; pause before sending F11
+InitialDelayMs := 15000
+BetweenLaunchMs := 2000
+DetectWindowTimeoutMs := 15000
+FullscreenDelayMs := 800
 
-; FUTURE: dedicated Edge profile -> set ProfileSwitch below and keep it constant across all windows.
+; =========================================================
+; HOOK / MOD: profilo Edge dedicato
+; Qui vive sessione, cookie, estensioni e stato del wall
+; =========================================================
 ProfileSwitch := '--user-data-dir="C:\Users\ServiceDesk\Desktop\start-ariawall\EdgeProfile"'
-OpenInAppMode := false ; false = finestra Edge normale, true = app mode (--app)
+OpenInAppMode := false   ; lasciare false: estensioni piu' compatibili
 
 ; =========================================================
 ; MAIN
@@ -58,9 +73,9 @@ if (!wall) {
     ExitApp
 }
 
-; FUTURE: chiusura preventiva di eventuali vecchie finestre del wall -> inserire qui una funzione dedicata.
+; HOOK / MOD futuro:
+; qui puoi chiudere eventuali vecchie finestre Edge del wall prima di riaprire tutto.
 
-; Open only the first window so the user can log in once.
 global HwndTL := OpenEdgeOnMonitor(edgePath, TopLeftUrl, wall.TopLeft, DetectWindowTimeoutMs, FullscreenDelayMs, BetweenLaunchMs, ProfileSwitch)
 if (!HwndTL) {
     MsgBox "Non sono riuscito ad aprire la finestra iniziale (alto sinistra)."
@@ -76,44 +91,45 @@ global HwndBR := OpenEdgeOnMonitor(edgePath, BottomRightUrl, wall.BottomRight, D
 if (UseAmazingAutoRefresh) {
     ApplyAmazingAutoRefresh(
         [HwndTL, HwndTR, HwndBL, HwndBR],
-        AmazingShortcut,
         AmazingPopupShortcut,
         AmazingIntervalSeconds,
         AmazingSetIntervalOnStartup,
         AmazingStartupDelayMs,
-        AmazingBetweenWindowsMs
+        AmazingBetweenWindowsMs,
+        AmazingPopupOpenDelayMs,
+        AmazingKeyDelayMs,
+        AmazingTabToStartCount,
+        AmazingReEnterFullscreen
     )
 }
 
-; Fallback opzionale se Amazing Auto Refresh non e' disponibile o non configurato.
 if (EnableLegacyKeepAlive) {
     SetTimer KeepAliveTick, KeepAliveIntervalMs
     SetTimer KeepAliveWugTick, WugKeepAliveIntervalMs
 }
 
-Persistent() ; Mantieni lo script in esecuzione dopo la fine della sezione principale
+Persistent()
+
+; =========================================================
+; KEEPALIVE
+; =========================================================
 
 KeepAliveTick() {
     global RefreshInKeepAlive, HwndTL, HwndTR, HwndBL
-    
-    ; Array che contiene SOLO le schede di vRealize / Aria. 
-    ; Ignoriamo HwndBR (WUG) perché l'invio di comandi blocca il suo carousel o lo disconnette.
+
     ariaWindows := [HwndTL, HwndTR, HwndBL]
-    
+
     for _, hwnd in ariaWindows {
         if (hwnd && WinExist("ahk_id " hwnd)) {
             try {
                 if (RefreshInKeepAlive)
-                    ControlSend "{F5}",, "ahk_id " hwnd  ; Aggiorna l'intera pagina
+                    ControlSend "{F5}",, "ahk_id " hwnd
                 else
-                    ControlSend "{F15}",, "ahk_id " hwnd ; Tasto innocuo per dire "ci sono, non chiudere la sessione"
+                    ControlSend "{F15}",, "ahk_id " hwnd
                 Sleep 200
             }
         }
     }
-    
-    ; Dopo il ciclo, volendo si può rimettere il focus all'ultima pagina (WUG), ma
-    ; in assenza di iterazione manuale il wall resta visibile indipendentemente dal focus.
 }
 
 KeepAliveWugTick() {
@@ -125,12 +141,10 @@ KeepAliveWugTick() {
 
     tick += 1
 
-    ; Keepalive leggero su WUG senza cambiare focus della finestra.
     try {
         ControlSend "{F15}",, "ahk_id " HwndBR
     }
 
-    ; Refresh raro opzionale per evitare timeout lato server molto aggressivi.
     if (WugRefreshEveryNTicks > 0 && Mod(tick, WugRefreshEveryNTicks) = 0) {
         try {
             ControlSend "{F5}",, "ahk_id " HwndBR
@@ -138,39 +152,70 @@ KeepAliveWugTick() {
     }
 }
 
-ApplyAmazingAutoRefresh(hwndList, shortcut, popupShortcut, intervalSeconds, setIntervalOnStartup, startupDelayMs, betweenWindowsMs) {
-    if (shortcut = "" && popupShortcut = "")
+; =========================================================
+; AMAZING AUTO REFRESH AUTOMATION
+; =========================================================
+
+ApplyAmazingAutoRefresh(hwndList, popupShortcut, intervalSeconds, setIntervalOnStartup, startupDelayMs, betweenWindowsMs, popupOpenDelayMs, keyDelayMs, tabToStartCount, reEnterFullscreen) {
+    if (popupShortcut = "")
         return false
 
-    ; Aspetta che i contenuti web siano realmente pronti prima di inviare la scorciatoia.
     Sleep startupDelayMs
+    SetKeyDelay keyDelayMs, keyDelayMs
 
     for _, hwnd in hwndList {
-        if (hwnd && WinExist("ahk_id " hwnd)) {
-            try {
+        if !(hwnd && WinExist("ahk_id " hwnd))
+            continue
+
+        try {
+            ; Esce temporaneamente da F11
+            WinActivate "ahk_id " hwnd
+            WinWaitActive "ahk_id " hwnd, , 2
+            Sleep 250
+            SendEvent "{F11}"
+            Sleep 500
+
+            ; Riattiva la finestra
+            WinActivate "ahk_id " hwnd
+            WinWaitActive "ahk_id " hwnd, , 2
+            Sleep 250
+
+            ; Apre il popup dell'estensione
+            SendEvent popupShortcut
+            Sleep popupOpenDelayMs
+
+            ; Prova a sovrascrivere il valore del timer
+            if (setIntervalOnStartup) {
+                SendEvent "^a"
+                Sleep 120
+                SendText intervalSeconds
+                Sleep 120
+            }
+
+            ; Va sul bottone START
+            Loop tabToStartCount {
+                SendEvent "{Tab}"
+                Sleep 70
+            }
+
+            ; Preme START
+            SendEvent "{Space}"
+            Sleep 500
+
+            ; Chiude il popup
+            SendEvent "{Esc}"
+            Sleep 250
+
+            ; Torna in fullscreen
+            if (reEnterFullscreen) {
                 WinActivate "ahk_id " hwnd
                 WinWaitActive "ahk_id " hwnd, , 2
                 Sleep 150
-
-                ; Opzionale: apre il popup dell'estensione e imposta il timer in secondi.
-                if (setIntervalOnStartup && popupShortcut != "") {
-                    Send popupShortcut
-                    Sleep 300
-                    Send "^a"
-                    Sleep 50
-                    Send intervalSeconds
-                    Sleep 50
-                    Send "{Enter}"
-                    Sleep 400
-                }
-
-                ; Avvio esplicito del refresh automatico nella pagina corrente.
-                if (shortcut != "") {
-                    Send shortcut
-                }
-
-                Sleep betweenWindowsMs
+                SendEvent "{F11}"
+                Sleep 400
             }
+
+            Sleep betweenWindowsMs
         }
     }
 
@@ -224,6 +269,7 @@ SelectWallMonitors(monitors) {
 
     startIdx := sortedByX.Length - 3
     rightCluster := []
+
     Loop 4 {
         rightCluster.Push(sortedByX[startIdx + A_Index - 1])
     }
@@ -244,18 +290,21 @@ SelectWallMonitors(monitors) {
 }
 
 SortMonitors(arr, prop) {
-    copy := arr.Clone()
+    copy := []
+
+    for _, item in arr
+        copy.Push(item)
 
     len := copy.Length
     if (len <= 1)
         return copy
 
-    ; Simple bubble sort to avoid method issues on older runtimes
     Loop len - 1 {
+        pass := A_Index
         swapped := false
-        Loop len - A_Index {
+
+        Loop len - pass {
             j := A_Index
-            ; use dynamic property access via .%prop% to avoid __Item/_item errors
             if (copy[j].%prop% > copy[j + 1].%prop%) {
                 tmp := copy[j]
                 copy[j] := copy[j + 1]
@@ -263,6 +312,7 @@ SortMonitors(arr, prop) {
                 swapped := true
             }
         }
+
         if !swapped
             break
     }
@@ -271,6 +321,8 @@ SortMonitors(arr, prop) {
 }
 
 OpenEdgeOnMonitor(edgePath, url, monitor, detectTimeoutMs, fullscreenDelayMs, betweenLaunchMs, profileSwitch) {
+    global OpenInAppMode
+
     existing := WinGetList("ahk_exe msedge.exe")
 
     if (OpenInAppMode)
@@ -278,7 +330,8 @@ OpenEdgeOnMonitor(edgePath, url, monitor, detectTimeoutMs, fullscreenDelayMs, be
     else
         runCmd := Format('"{1}" {2} --new-window "{3}"', edgePath, profileSwitch, url)
 
-    ; FUTURE: verifica raggiungibilita' della pagina prima di aprire -> inserire check qui (HTTP ping) e gestire fallback.
+    ; HOOK / MOD futuro:
+    ; qui puoi aggiungere verifica raggiungibilita' pagina prima dell'apertura
     Run runCmd
 
     hwnd := WaitForNewEdgeWindow(existing, detectTimeoutMs)
@@ -330,15 +383,15 @@ ShowConfirmOnMonitor(monitor) {
     myGui := Gui("+AlwaysOnTop +ToolWindow -SysMenu")
     myGui.SetFont("s16 bold")
     myGui.AddText("w520 Center", "Completa il login nella finestra in alto a sinistra, poi premi OK per aprire automaticamente le altre tre finestre.")
-    
+
     okBtn := myGui.AddButton("w160 h50 Default", "OK")
     okBtn.OnEvent("Click", (*) => myGui.Destroy())
 
     myGui.Show("AutoSize Hide")
-    
+
     xOut := 0, yOut := 0, wOut := 0, hOut := 0
     myGui.GetPos(&xOut, &yOut, &wOut, &hOut)
-    
+
     xPos := monitor.Left + Floor((monitor.Width - wOut) / 2)
     yPos := monitor.Top + Floor((monitor.Height - hOut) / 2)
     myGui.Show(Format("x{} y{}", xPos, yPos))

@@ -187,9 +187,22 @@ GetBigWallCandidates(monitors) {
     maxArea := GetLargestArea(monitors)
     minArea := Floor(maxArea * WallMonitorMinAreaRatio)
 
+    maxWidth := 0
+    maxHeight := 0
+    for _, m in monitors {
+        if (m.Width > maxWidth)
+            maxWidth := m.Width
+        if (m.Height > maxHeight)
+            maxHeight := m.Height
+    }
+
+    minWidth := Floor(maxWidth * 0.85)
+    minHeight := Floor(maxHeight * 0.85)
+
     result := []
     for _, m in monitors {
-        if (m.Area >= minArea)
+        ; Tiene fuori monitor piccoli/centrali con risoluzioni molto diverse dai 4 monitor wall
+        if (m.Area >= minArea && m.Width >= minWidth && m.Height >= minHeight)
             result.Push(m)
     }
 
@@ -227,9 +240,9 @@ SelectWallMonitors(monitors) {
     ; 1) esclude i monitor piccoli
     wallCandidates := GetBigWallCandidates(monitors)
 
-    ; 2) se per qualche motivo ne trova più di 4, prende i 4 più a destra tra quelli grandi
+    ; 2) se ne trova più di 4, prende i 4 più grandi (evita il piccolo centrale)
     if (wallCandidates.Length > 4)
-        wallCandidates := GetRightmostMonitors(wallCandidates, 4)
+        wallCandidates := GetLargestMonitors(wallCandidates, 4)
 
     ; 3) fallback: se ne trova meno di 4, prende comunque i 4 più grandi
     if (wallCandidates.Length < 4)

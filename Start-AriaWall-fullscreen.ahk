@@ -25,10 +25,10 @@ RefreshInKeepAlive := false       ; Se 'true' premerà F5 (aggiorna la pagina), 
 WugKeepAliveIntervalMs := 180000  ; 3 minuti: keepalive dedicato a WhatsUp Gold
 WugRefreshEveryNTicks := 10       ; Ogni N tick WUG invia F5 (0 = mai)
 
-InitialDelayMs := 15000           ; wait before starting (OS/desktop ready)
-BetweenLaunchMs := 2000           ; pause between window launches
+InitialDelayMs := 3000            ; wait before starting (OS/desktop ready)
+BetweenLaunchMs := 700            ; pause between window launches
 DetectWindowTimeoutMs := 15000    ; wait for Edge window creation
-FullscreenDelayMs := 800          ; pause before sending F11
+FullscreenDelayMs := 300          ; pause before sending F11
 
 ; FUTURE: dedicated Edge profile -> set ProfileSwitch below and keep it constant across all windows.
 ProfileSwitch := '--user-data-dir="C:\MonitorWall\EdgeProfile"'

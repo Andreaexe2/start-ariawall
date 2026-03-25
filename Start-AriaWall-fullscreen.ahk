@@ -113,9 +113,6 @@ KeepAliveTick() {
             }
         }
     }
-    
-    ; Dopo il ciclo, volendo si può rimettere il focus all'ultima pagina (WUG), ma
-    ; in assenza di iterazione manuale il wall resta visibile indipendentemente dal focus.
 }
 
 KeepAliveWugTick() {
@@ -205,14 +202,20 @@ GetMonitorList() {
         idx := A_Index
         MonitorGet idx, &left, &top, &right, &bottom
 
+        width := right - left
+        height := bottom - top
+
         list.Push({
             Index: idx,
             Left: left,
             Top: top,
             Right: right,
             Bottom: bottom,
-            Width: right - left,
-            Height: bottom - top
+            Width: width,
+            Height: height,
+            Area: width * height,
+            CenterX: left + Floor(width / 2),
+            CenterY: top + Floor(height / 2)
         })
     }
 
@@ -220,22 +223,30 @@ GetMonitorList() {
 }
 
 SelectWallMonitors(monitors) {
-    sortedByX := SortMonitors(monitors, "Left")
-    if (sortedByX.Length < 4)
+    ; FIX:
+    ; prima prendevi i 4 monitor più a destra.
+    ; adesso prendiamo i 4 monitor più grandi e ignoriamo quello piccolo.
+    if (monitors.Length < 4)
         return 0
 
-    startIdx := sortedByX.Length - 3
-    rightCluster := []
+    sortedByArea := SortMonitors(monitors, "Area")
+
+    ; prendi i 4 più grandi
+    bigFour := []
+    startIdx := sortedByArea.Length - 3
     Loop 4 {
-        rightCluster.Push(sortedByX[startIdx + A_Index - 1])
+        bigFour.Push(sortedByArea[startIdx + A_Index - 1])
     }
 
-    sortedByY := SortMonitors(rightCluster, "Top")
-    topTwo := [sortedByY[1], sortedByY[2]]
-    bottomTwo := [sortedByY[3], sortedByY[4]]
+    ; ordina i 4 monitor principali dall'alto verso il basso
+    sortedByCenterY := SortMonitors(bigFour, "CenterY")
 
-    topSorted := SortMonitors(topTwo, "Left")
-    bottomSorted := SortMonitors(bottomTwo, "Left")
+    topTwo := [sortedByCenterY[1], sortedByCenterY[2]]
+    bottomTwo := [sortedByCenterY[3], sortedByCenterY[4]]
+
+    ; dentro ogni riga, ordina da sinistra a destra
+    topSorted := SortMonitors(topTwo, "CenterX")
+    bottomSorted := SortMonitors(bottomTwo, "CenterX")
 
     return {
         TopLeft: topSorted[1],
@@ -284,7 +295,6 @@ OpenEdgeOnMonitor(edgePath, url, monitor, detectTimeoutMs, fullscreenDelayMs, be
     else
         runCmd := Format('"{1}" {2} --new-window "{3}"', edgePath, profileSwitch, url)
 
-    ; FUTURE: verifica raggiungibilita' della pagina prima di aprire -> inserire check qui (HTTP ping) e gestire fallback.
     Run runCmd
 
     hwnd := WaitForNewEdgeWindow(existing, detectTimeoutMs)

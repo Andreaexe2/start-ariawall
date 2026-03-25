@@ -237,16 +237,9 @@ SelectWallMonitors(monitors) {
     if (monitors.Length < 4)
         return 0
 
-    ; 1) esclude i monitor piccoli
-    wallCandidates := GetBigWallCandidates(monitors)
-
-    ; 2) se ne trova più di 4, prende i 4 più grandi (evita il piccolo centrale)
-    if (wallCandidates.Length > 4)
-        wallCandidates := GetLargestMonitors(wallCandidates, 4)
-
-    ; 3) fallback: se ne trova meno di 4, prende comunque i 4 più grandi
-    if (wallCandidates.Length < 4)
-        wallCandidates := GetLargestMonitors(monitors, 4)
+    ; Usa sempre i 4 monitor con area più grande.
+    ; In un setup 4 grandi + 1 piccolo, il piccolo viene escluso in modo deterministico.
+    wallCandidates := GetLargestMonitors(monitors, 4)
 
     if (wallCandidates.Length < 4)
         return 0

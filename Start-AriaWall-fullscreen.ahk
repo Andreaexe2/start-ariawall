@@ -19,7 +19,7 @@ FullscreenDelayMs := 300
 ; HOOK/MOD:
 ; attesa configurazione monitor stabile
 ; =========================================================
-RequiredMonitorCount := 4
+RequiredMonitorCount := 5
 MonitorPollIntervalMs := 2000
 MonitorWaitTimeoutMs := 90000
 StablePollsRequired := 2
@@ -64,9 +64,9 @@ if (monitors.Length < RequiredMonitorCount) {
     ExitApp
 }
 
-wall := SelectWallMonitors(monitors)
+wall := SelectWallMonitorsByIndex(monitors)
 if (!wall) {
-    MsgBox "Impossibile identificare correttamente i 4 monitor grandi del wall."
+    MsgBox "Impossibile trovare i monitor richiesti: 3, 2, 5, 4. Monitor 1 escluso."
     ExitApp
 }
 
@@ -259,6 +259,33 @@ SelectWallMonitors(monitors) {
         TopRight: topSorted[2],
         BottomLeft: bottomSorted[1],
         BottomRight: bottomSorted[2]
+    }
+}
+
+FindMonitorByIndex(monitors, indexToFind) {
+    for _, m in monitors {
+        if (m.Index = indexToFind)
+            return m
+    }
+    return 0
+}
+
+SelectWallMonitorsByIndex(monitors) {
+    ; Mappatura fissa richiesta:
+    ; alto-sinistra = 3, alto-destra = 2, basso-sinistra = 5, basso-destra = 4
+    topLeft := FindMonitorByIndex(monitors, 3)
+    topRight := FindMonitorByIndex(monitors, 2)
+    bottomLeft := FindMonitorByIndex(monitors, 5)
+    bottomRight := FindMonitorByIndex(monitors, 4)
+
+    if (!topLeft || !topRight || !bottomLeft || !bottomRight)
+        return 0
+
+    return {
+        TopLeft: topLeft,
+        TopRight: topRight,
+        BottomLeft: bottomLeft,
+        BottomRight: bottomRight
     }
 }
 

@@ -26,6 +26,14 @@ StablePollsRequired := 2
 
 ; =========================================================
 ; HOOK/MOD:
+; esclude i monitor piccoli.
+; 0.70 = considero wall solo i monitor con area >= 70% del più grande
+; Se il monitor piccolo dovesse ancora rientrare, alza a 0.75 o 0.80
+; =========================================================
+WallMonitorMinAreaRatio := 0.70
+
+; =========================================================
+; HOOK/MOD:
 ; se vuoi cambiare profilo Edge, modifica solo questa riga
 ; =========================================================
 ProfileSwitch := '--user-data-dir="C:\Users\ServiceDesk\Desktop\start-ariawall\EdgeProfile"'
@@ -58,7 +66,7 @@ if (monitors.Length < RequiredMonitorCount) {
 
 wall := SelectWallMonitors(monitors)
 if (!wall) {
-    MsgBox "Impossibile identificare correttamente i 4 monitor del wall."
+    MsgBox "Impossibile identificare correttamente i 4 monitor grandi del wall."
     ExitApp
 }
 
@@ -107,8 +115,7 @@ WaitForStableMonitorTopology(requiredCount, timeoutMs, pollIntervalMs, stablePol
         lastList := GetMonitorList()
 
         if (lastList.Length >= requiredCount) {
-            candidate := GetRightmostMonitors(lastList, 4)
-            sig := BuildMonitorSignature(candidate)
+            sig := BuildMonitorSignature(lastList)
 
             if (sig != "" && sig = lastSig) {
                 stableCount += 1
@@ -156,11 +163,49 @@ GetMonitorList() {
             Bottom: bottom,
             Width: width,
             Height: height,
-            Area: width * height
+            Area: width * height,
+            CenterX: left + Floor(width / 2),
+            CenterY: top + Floor(height / 2)
         })
     }
 
     return list
+}
+
+GetLargestArea(monitors) {
+    maxArea := 0
+    for _, m in monitors {
+        if (m.Area > maxArea)
+            maxArea := m.Area
+    }
+    return maxArea
+}
+
+GetBigWallCandidates(monitors) {
+    global WallMonitorMinAreaRatio
+
+    maxArea := GetLargestArea(monitors)
+    minArea := Floor(maxArea * WallMonitorMinAreaRatio)
+
+    result := []
+    for _, m in monitors {
+        if (m.Area >= minArea)
+            result.Push(m)
+    }
+
+    return result
+}
+
+GetLargestMonitors(monitors, howMany) {
+    sorted := SortMonitors(monitors, "Area", true)
+    result := []
+
+    limit := Min(howMany, sorted.Length)
+    Loop limit {
+        result.Push(sorted[A_Index])
+    }
+
+    return result
 }
 
 GetRightmostMonitors(monitors, howMany) {
@@ -179,18 +224,29 @@ SelectWallMonitors(monitors) {
     if (monitors.Length < 4)
         return 0
 
-    ; Prende i 4 monitor più a destra, escludendo quello piccolo a sinistra
-    wallCandidates := GetRightmostMonitors(monitors, 4)
+    ; 1) esclude i monitor piccoli
+    wallCandidates := GetBigWallCandidates(monitors)
+
+    ; 2) se per qualche motivo ne trova più di 4, prende i 4 più a destra tra quelli grandi
+    if (wallCandidates.Length > 4)
+        wallCandidates := GetRightmostMonitors(wallCandidates, 4)
+
+    ; 3) fallback: se ne trova meno di 4, prende comunque i 4 più grandi
+    if (wallCandidates.Length < 4)
+        wallCandidates := GetLargestMonitors(monitors, 4)
+
     if (wallCandidates.Length < 4)
         return 0
 
-    sortedByTop := SortMonitors(wallCandidates, "Top", false)
+    ; divide in alto/basso usando il centro verticale
+    sortedByCenterY := SortMonitors(wallCandidates, "CenterY", false)
 
-    topTwo := [sortedByTop[1], sortedByTop[2]]
-    bottomTwo := [sortedByTop[3], sortedByTop[4]]
+    topTwo := [sortedByCenterY[1], sortedByCenterY[2]]
+    bottomTwo := [sortedByCenterY[3], sortedByCenterY[4]]
 
-    topSorted := SortMonitors(topTwo, "Left", false)
-    bottomSorted := SortMonitors(bottomTwo, "Left", false)
+    ; dentro ogni riga divide sinistra/destra
+    topSorted := SortMonitors(topTwo, "CenterX", false)
+    bottomSorted := SortMonitors(bottomTwo, "CenterX", false)
 
     return {
         TopLeft: topSorted[1],

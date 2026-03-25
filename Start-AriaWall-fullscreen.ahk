@@ -11,17 +11,18 @@ BottomLeftUrl := "https://aria.infra.wetechs.priv/vcf-operations/ui/operations/d
 BottomRightUrl := "https://ws-wb1-i-wug01.infra.wetechs.priv/NmConsole/#v=Wug_view_nocviewer_NocViewer/p=%7B%22isMainView%22%3Atrue%2C%22DeckId%22%3A1%7D"
 
 InitialDelayMs := 5000
-BetweenLaunchMs := 300
-DetectWindowTimeoutMs := 5000
-FullscreenDelayMs := 250
+BetweenLaunchMs := 400
+DetectWindowTimeoutMs := 12000
+FullscreenDelayMs := 300
 
 ; =========================================================
 ; HOOK/MOD:
-; attesa monitor reali all'avvio
+; attesa configurazione monitor stabile
 ; =========================================================
 RequiredMonitorCount := 4
 MonitorPollIntervalMs := 2000
-MonitorWaitTimeoutMs := 60000   ; aspetta fino a 60 secondi
+MonitorWaitTimeoutMs := 90000     ; fino a 90 secondi
+StablePollsRequired := 2          ; deve vedere la stessa topologia per 2 controlli consecutivi
 
 ; =========================================================
 ; HOOK/MOD:
@@ -48,13 +49,18 @@ if (edgePath = "") {
     ExitApp
 }
 
-monitors := WaitForRequiredMonitors(RequiredMonitorCount, MonitorWaitTimeoutMs, MonitorPollIntervalMs)
+monitors := WaitForStableMonitorTopology(RequiredMonitorCount, MonitorWaitTimeoutMs, MonitorPollIntervalMs, StablePollsRequired)
 
 if (monitors.Length < RequiredMonitorCount) {
-    MsgBox "Dopo l'attesa Windows vede ancora solo " monitors.Length " monitor. Procedo comunque, ma il posizionamento potrebbe essere errato."
+    MsgBox "Windows non ha rilevato almeno " RequiredMonitorCount " monitor in modo stabile. Rilevati: " monitors.Length
+    ExitApp
 }
 
 wall := SelectWallMonitors(monitors)
+if (!wall) {
+    MsgBox "Impossibile identificare correttamente i 4 monitor del wall."
+    ExitApp
+}
 
 ; 1) Apro solo la finestra in alto a sinistra
 global HwndTL := OpenEdgeOnMonitor(edgePath, TopLeftUrl, wall.TopLeft, DetectWindowTimeoutMs, FullscreenDelayMs, BetweenLaunchMs, ProfileSwitch)
@@ -63,8 +69,7 @@ if (!HwndTL) {
     ExitApp
 }
 
-; 2) Mostro il popup sul monitor a destra per dare tempo al login.
-; Non ruba il focus. Quando premi OK, rifisso la prima finestra.
+; 2) Popup sul monitor in alto a destra, senza rubare il focus
 ShowConfirmOnMonitor(wall.TopRight, HwndTL, wall.TopLeft)
 
 ; 3) Dopo OK apro le altre 3 finestre
@@ -92,20 +97,44 @@ GetEdgePath() {
     return ""
 }
 
-WaitForRequiredMonitors(requiredCount, timeoutMs, pollIntervalMs) {
+WaitForStableMonitorTopology(requiredCount, timeoutMs, pollIntervalMs, stablePollsRequired) {
     start := A_TickCount
     lastList := GetMonitorList()
+    lastSig := ""
+    stableCount := 0
 
     while ((A_TickCount - start) < timeoutMs) {
         lastList := GetMonitorList()
 
-        if (lastList.Length >= requiredCount)
-            return lastList
+        if (lastList.Length >= requiredCount) {
+            candidate := GetLargestMonitors(lastList, 4)
+            sig := BuildMonitorSignature(candidate)
+
+            if (sig != "" && sig = lastSig) {
+                stableCount += 1
+            } else {
+                stableCount := 1
+                lastSig := sig
+            }
+
+            if (stableCount >= stablePollsRequired)
+                return lastList
+        }
 
         Sleep pollIntervalMs
     }
 
     return lastList
+}
+
+BuildMonitorSignature(monitors) {
+    sig := ""
+
+    for _, m in monitors {
+        sig .= m.Left "|" m.Top "|" m.Width "|" m.Height ";"
+    }
+
+    return sig
 }
 
 GetMonitorList() {
@@ -116,53 +145,53 @@ GetMonitorList() {
         idx := A_Index
         MonitorGet idx, &left, &top, &right, &bottom
 
+        width := right - left
+        height := bottom - top
+
         list.Push({
             Index: idx,
             Left: left,
             Top: top,
             Right: right,
             Bottom: bottom,
-            Width: right - left,
-            Height: bottom - top
+            Width: width,
+            Height: height,
+            Area: width * height
         })
     }
 
     return list
 }
 
+GetLargestMonitors(monitors, howMany) {
+    sorted := SortMonitors(monitors, "Area", true)
+    result := []
+
+    limit := Min(howMany, sorted.Length)
+    Loop limit {
+        result.Push(sorted[A_Index])
+    }
+
+    return result
+}
+
 SelectWallMonitors(monitors) {
-    sortedByX := SortMonitors(monitors, "Left")
+    if (monitors.Length < 4)
+        return 0
 
-    ; fallback: se ci sono meno di 4 monitor, usa quelli disponibili
-    if (sortedByX.Length < 4) {
-        m1 := sortedByX.Length >= 1 ? sortedByX[1] : {Left: 0, Top: 0, Width: 1920, Height: 1080}
-        m2 := sortedByX.Length >= 2 ? sortedByX[2] : m1
-        m3 := sortedByX.Length >= 3 ? sortedByX[3] : m1
+    ; Prendo i 4 monitor piu' grandi per escludere quello piccolo
+    wallCandidates := GetLargestMonitors(monitors, 4)
+    if (wallCandidates.Length < 4)
+        return 0
 
-        return {
-            TopLeft: m1,
-            TopRight: m2,
-            BottomLeft: m3,
-            BottomRight: m2
-        }
-    }
+    ; Ordino i 4 monitor del wall per Top/Left
+    sortedByTop := SortMonitors(wallCandidates, "Top", false)
 
-    ; prende i 4 monitor piu' a destra
-    startIdx := sortedByX.Length - 3
-    rightCluster := []
+    topTwo := [sortedByTop[1], sortedByTop[2]]
+    bottomTwo := [sortedByTop[3], sortedByTop[4]]
 
-    Loop 4 {
-        rightCluster.Push(sortedByX[startIdx + A_Index - 1])
-    }
-
-    ; divide in alto/basso
-    sortedByY := SortMonitors(rightCluster, "Top")
-    topTwo := [sortedByY[1], sortedByY[2]]
-    bottomTwo := [sortedByY[3], sortedByY[4]]
-
-    ; divide in sinistra/destra
-    topSorted := SortMonitors(topTwo, "Left")
-    bottomSorted := SortMonitors(bottomTwo, "Left")
+    topSorted := SortMonitors(topTwo, "Left", false)
+    bottomSorted := SortMonitors(bottomTwo, "Left", false)
 
     return {
         TopLeft: topSorted[1],
@@ -172,7 +201,7 @@ SelectWallMonitors(monitors) {
     }
 }
 
-SortMonitors(arr, prop) {
+SortMonitors(arr, prop, descending := false) {
     copy := []
 
     for _, item in arr
@@ -188,7 +217,20 @@ SortMonitors(arr, prop) {
 
         Loop len - pass {
             j := A_Index
-            if (copy[j].%prop% > copy[j + 1].%prop%) {
+
+            leftVal := copy[j].%prop%
+            rightVal := copy[j + 1].%prop%
+
+            shouldSwap := false
+            if (descending) {
+                if (leftVal < rightVal)
+                    shouldSwap := true
+            } else {
+                if (leftVal > rightVal)
+                    shouldSwap := true
+            }
+
+            if (shouldSwap) {
                 tmp := copy[j]
                 copy[j] := copy[j + 1]
                 copy[j + 1] := tmp
@@ -207,15 +249,16 @@ OpenEdgeOnMonitor(edgePath, url, monitor, detectTimeoutMs, fullscreenDelayMs, be
     global OpenInAppMode
 
     existing := WinGetList("ahk_exe msedge.exe")
+    pid := 0
 
     if (OpenInAppMode)
         runCmd := Format('"{1}" {2} --new-window --app="{3}"', edgePath, profileSwitch, url)
     else
         runCmd := Format('"{1}" {2} --new-window "{3}"', edgePath, profileSwitch, url)
 
-    Run runCmd
+    Run runCmd, , , &pid
 
-    hwnd := WaitForNewEdgeWindow(existing, detectTimeoutMs)
+    hwnd := WaitForEdgeWindow(existing, pid, detectTimeoutMs)
     if (!hwnd)
         return 0
 
@@ -223,11 +266,50 @@ OpenEdgeOnMonitor(edgePath, url, monitor, detectTimeoutMs, fullscreenDelayMs, be
     return hwnd
 }
 
+WaitForEdgeWindow(existingList, pid, timeoutMs) {
+    start := A_TickCount
+
+    while (A_TickCount - start < timeoutMs) {
+        ; Primo tentativo: finestra del PID appena lanciato
+        if (pid) {
+            byPid := WinGetList("ahk_pid " pid)
+            for _, hwnd in byPid {
+                if (IsUsableEdgeWindow(hwnd))
+                    return hwnd
+            }
+        }
+
+        ; Fallback: nuova finestra Edge rispetto alla lista iniziale
+        current := WinGetList("ahk_exe msedge.exe")
+        for _, hwnd in current {
+            if (!ArrayContains(existingList, hwnd) && IsUsableEdgeWindow(hwnd))
+                return hwnd
+        }
+
+        Sleep 200
+    }
+
+    return 0
+}
+
+IsUsableEdgeWindow(hwnd) {
+    try {
+        class := WinGetClass("ahk_id " hwnd)
+        if (class != "Chrome_WidgetWin_1")
+            return false
+
+        ; Anche se il titolo e' ancora vuoto, la finestra e' comunque valida se la classe e' giusta
+        return true
+    } catch {
+        return false
+    }
+}
+
 ForceWindowPlacementAndFullscreen(hwnd, monitor, fullscreenDelayMs, betweenLaunchMs) {
     if !(hwnd && WinExist("ahk_id " hwnd))
         return false
 
-    ; primo allineamento
+    ; Primo tentativo
     WinRestore "ahk_id " hwnd
     Sleep 150
 
@@ -235,19 +317,18 @@ ForceWindowPlacementAndFullscreen(hwnd, monitor, fullscreenDelayMs, betweenLaunc
     Sleep 250
 
     WinActivate "ahk_id " hwnd
-    WinWaitActive "ahk_id " hwnd, , 2
+    WinWaitActive "ahk_id " hwnd, , 3
     Sleep 150
 
     WinMaximize "ahk_id " hwnd
     Sleep fullscreenDelayMs
 
-    ; primo tentativo F11
     WinActivate "ahk_id " hwnd
     Sleep 150
-    Send "{F11}"
+    SendEvent "{F11}"
     Sleep 350
 
-    ; secondo passaggio: se la finestra non copre il monitor, la riforzo
+    ; Verifica e secondo tentativo se necessario
     WinGetPos(&x, &y, &w, &h, "ahk_id " hwnd)
 
     if (x != monitor.Left || y != monitor.Top || w < monitor.Width || h < monitor.Height) {
@@ -256,35 +337,16 @@ ForceWindowPlacementAndFullscreen(hwnd, monitor, fullscreenDelayMs, betweenLaunc
         WinMove monitor.Left, monitor.Top, monitor.Width, monitor.Height, "ahk_id " hwnd
         Sleep 250
         WinActivate "ahk_id " hwnd
-        WinWaitActive "ahk_id " hwnd, , 2
+        WinWaitActive "ahk_id " hwnd, , 3
         Sleep 150
         WinMaximize "ahk_id " hwnd
         Sleep fullscreenDelayMs
-        Send "{F11}"
+        SendEvent "{F11}"
         Sleep 350
     }
 
     Sleep betweenLaunchMs
     return true
-}
-
-WaitForNewEdgeWindow(existingList, timeoutMs) {
-    start := A_TickCount
-
-    while (A_TickCount - start < timeoutMs) {
-        current := WinGetList("ahk_exe msedge.exe")
-
-        for _, hwnd in current {
-            if !ArrayContains(existingList, hwnd) {
-                if (WinGetTitle("ahk_id " hwnd) != "")
-                    return hwnd
-            }
-        }
-
-        Sleep 200
-    }
-
-    return 0
 }
 
 ArrayContains(arr, value) {
@@ -302,7 +364,7 @@ ShowConfirmOnMonitor(monitor, firstHwnd, firstMonitor) {
 
     okBtn := myGui.AddButton("w160 h50 Default", "OK")
     okBtn.OnEvent("Click", (*) => (
-        ; prima di chiudere il popup, riforza la prima finestra
+        ; Al click su OK, riforzo la prima finestra sul monitor giusto e in fullscreen
         ForceWindowPlacementAndFullscreen(firstHwnd, firstMonitor, 250, 100),
         myGui.Destroy()
     ))
@@ -315,7 +377,7 @@ ShowConfirmOnMonitor(monitor, firstHwnd, firstMonitor) {
     xPos := monitor.Left + Floor((monitor.Width - wOut) / 2)
     yPos := monitor.Top + Floor((monitor.Height - hOut) / 2)
 
-    ; mostra il popup senza rubare il focus alla finestra Edge
+    ; Mostra il popup senza rubare il focus alla finestra Edge
     myGui.Show(Format("x{} y{} NoActivate", xPos, yPos))
 
     WinWaitClose("ahk_id " myGui.Hwnd)

@@ -37,16 +37,8 @@ if (edgePath = "") {
 }
 
 monitors := GetMonitorList()
-while (monitors.Length < 4) {
-    Sleep 5000 ; Attende 5 secondi e riprova
-    monitors := GetMonitorList()
-}
 
 wall := SelectWallMonitors(monitors)
-if (!wall) {
-    MsgBox "Impossibile identificare i 4 monitor del wall (piu' a destra)."
-    ExitApp
-}
 
 ; 1) Apro solo la finestra in alto a sinistra
 global HwndTL := OpenEdgeOnMonitor(edgePath, TopLeftUrl, wall.TopLeft, DetectWindowTimeoutMs, FullscreenDelayMs, BetweenLaunchMs, ProfileSwitch)
@@ -107,8 +99,19 @@ GetMonitorList() {
 
 SelectWallMonitors(monitors) {
     sortedByX := SortMonitors(monitors, "Left")
-    if (sortedByX.Length < 4)
-        return 0
+    
+    ; Se ci sono meno di 4 monitor, usiamo quelli disponibili come fallback
+    if (sortedByX.Length < 4) {
+        m1 := sortedByX.Length >= 1 ? sortedByX[1] : {Left: 0, Top: 0, Width: 1920, Height: 1080}
+        m2 := sortedByX.Length >= 2 ? sortedByX[2] : m1
+        m3 := sortedByX.Length >= 3 ? sortedByX[3] : m1
+        return {
+            TopLeft: m1,
+            TopRight: m2,
+            BottomLeft: m3,
+            BottomRight: m2
+        }
+    }
 
     ; Prende i 4 monitor piu' a destra
     startIdx := sortedByX.Length - 3

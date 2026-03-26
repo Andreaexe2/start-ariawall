@@ -13,22 +13,27 @@ BottomRightUrl := "https://ws-wb1-i-wug01.infra.wetechs.priv/NmConsole/#v=Wug_vi
 InitialDelayMs := 5000
 BetweenLaunchMs := 400
 DetectWindowTimeoutMs := 12000
-FullscreenDelayMs := 300
+FullscreenDelayMs := 500
 
 ; =========================================================
 ; HOOK/MOD:
 ; attesa configurazione monitor stabile
 ; =========================================================
-RequiredMonitorCount := 4
+RequiredMonitorCount := 5
 MonitorPollIntervalMs := 2000
 MonitorWaitTimeoutMs := 90000
 StablePollsRequired := 2
 
 ; =========================================================
 ; HOOK/MOD:
-; esclude i monitor piccoli
+; mapping monitor fisso del wall
+; schermo 1 NON usato
 ; =========================================================
-WallMonitorMinAreaRatio := 0.70
+TopLeftMonitorIndex := 3
+TopRightMonitorIndex := 2
+BottomLeftMonitorIndex := 5
+BottomRightMonitorIndex := 4
+ExcludedMonitorIndex := 1
 
 ; =========================================================
 ; HOOK/MOD:
@@ -62,23 +67,22 @@ if (monitors.Length < RequiredMonitorCount) {
     ExitApp
 }
 
-wall := SelectWallMonitors(monitors)
+wall := BuildFixedWallLayout(monitors)
 if (!wall) {
-    MsgBox "Impossibile identificare correttamente i 4 monitor grandi del wall."
+    MsgBox "Impossibile costruire il layout monitor fisso.`nControlla che siano presenti i monitor 2, 3, 4 e 5 e che il monitor 1 non venga usato."
     ExitApp
 }
 
-; 1) Apro solo la finestra in alto a sinistra
+; 1) Apro solo la finestra in alto a sinistra (schermo 3)
 global HwndTL := OpenEdgeOnMonitor(edgePath, TopLeftUrl, wall.TopLeft, DetectWindowTimeoutMs, FullscreenDelayMs, BetweenLaunchMs, ProfileSwitch)
 if (!HwndTL) {
-    MsgBox "Non sono riuscito ad aprire la finestra iniziale (alto sinistra)."
+    MsgBox "Non sono riuscito ad aprire la finestra iniziale (alto sinistra / schermo 3)."
     ExitApp
 }
 
-; 2) Popup sul monitor in alto a destra, senza rubare il focus
+; 2) Popup sul monitor in alto a destra (schermo 2), senza rubare il focus
 ShowConfirmOnMonitor(wall.TopRight)
 
-; piccolo margine per evitare click/tasti residui dopo OK
 Sleep 300
 
 ; 3) Dopo OK apro le altre 3 finestre
@@ -176,132 +180,50 @@ GetMonitorList() {
     return list
 }
 
-GetLargestArea(monitors) {
-    maxArea := 0
+GetMonitorByIndex(monitors, wantedIndex) {
     for _, m in monitors {
-        if (m.Area > maxArea)
-            maxArea := m.Area
+        if (m.Index = wantedIndex)
+            return m
     }
-    return maxArea
+    return 0
 }
 
-GetBigWallCandidates(monitors) {
-    global WallMonitorMinAreaRatio
+BuildFixedWallLayout(monitors) {
+    global TopLeftMonitorIndex
+    global TopRightMonitorIndex
+    global BottomLeftMonitorIndex
+    global BottomRightMonitorIndex
+    global ExcludedMonitorIndex
 
-    maxArea := GetLargestArea(monitors)
-    minArea := Floor(maxArea * WallMonitorMinAreaRatio)
+    tl := GetMonitorByIndex(monitors, TopLeftMonitorIndex)
+    tr := GetMonitorByIndex(monitors, TopRightMonitorIndex)
+    bl := GetMonitorByIndex(monitors, BottomLeftMonitorIndex)
+    br := GetMonitorByIndex(monitors, BottomRightMonitorIndex)
 
-    result := []
-    for _, m in monitors {
-        if (m.Area >= minArea)
-            result.Push(m)
-    }
-
-    return result
-}
-
-GetLargestMonitors(monitors, howMany) {
-    sorted := SortMonitors(monitors, "Area", true)
-    result := []
-
-    limit := Min(howMany, sorted.Length)
-    Loop limit {
-        result.Push(sorted[A_Index])
-    }
-
-    return result
-}
-
-GetRightmostMonitors(monitors, howMany) {
-    sorted := SortMonitors(monitors, "Left", true)
-    result := []
-
-    limit := Min(howMany, sorted.Length)
-    Loop limit {
-        result.Push(sorted[A_Index])
-    }
-
-    return result
-}
-
-SelectWallMonitors(monitors) {
-    if (monitors.Length < 4)
+    if (!tl || !tr || !bl || !br)
         return 0
 
-    ; 1) esclude i monitor piccoli
-    wallCandidates := GetBigWallCandidates(monitors)
+    used := Map()
+    used[tl.Index] := true
+    used[tr.Index] := true
+    used[bl.Index] := true
+    used[br.Index] := true
 
-    ; 2) se per qualche motivo ne trova più di 4, prende i 4 più a destra tra quelli grandi
-    if (wallCandidates.Length > 4)
-        wallCandidates := GetRightmostMonitors(wallCandidates, 4)
-
-    ; 3) fallback: se ne trova meno di 4, prende comunque i 4 più grandi
-    if (wallCandidates.Length < 4)
-        wallCandidates := GetLargestMonitors(monitors, 4)
-
-    if (wallCandidates.Length < 4)
+    if (used.Count != 4)
         return 0
 
-    ; divide in alto/basso usando il centro verticale
-    sortedByCenterY := SortMonitors(wallCandidates, "CenterY", false)
-
-    topTwo := [sortedByCenterY[1], sortedByCenterY[2]]
-    bottomTwo := [sortedByCenterY[3], sortedByCenterY[4]]
-
-    ; dentro ogni riga divide sinistra/destra
-    topSorted := SortMonitors(topTwo, "CenterX", false)
-    bottomSorted := SortMonitors(bottomTwo, "CenterX", false)
+    if (tl.Index = ExcludedMonitorIndex
+     || tr.Index = ExcludedMonitorIndex
+     || bl.Index = ExcludedMonitorIndex
+     || br.Index = ExcludedMonitorIndex)
+        return 0
 
     return {
-        TopLeft: topSorted[1],
-        TopRight: topSorted[2],
-        BottomLeft: bottomSorted[1],
-        BottomRight: bottomSorted[2]
+        TopLeft: tl,
+        TopRight: tr,
+        BottomLeft: bl,
+        BottomRight: br
     }
-}
-
-SortMonitors(arr, prop, descending := false) {
-    copy := []
-
-    for _, item in arr
-        copy.Push(item)
-
-    len := copy.Length
-    if (len <= 1)
-        return copy
-
-    Loop len - 1 {
-        pass := A_Index
-        swapped := false
-
-        Loop len - pass {
-            j := A_Index
-
-            leftVal := copy[j].%prop%
-            rightVal := copy[j + 1].%prop%
-
-            shouldSwap := false
-            if (descending) {
-                if (leftVal < rightVal)
-                    shouldSwap := true
-            } else {
-                if (leftVal > rightVal)
-                    shouldSwap := true
-            }
-
-            if (shouldSwap) {
-                tmp := copy[j]
-                copy[j] := copy[j + 1]
-                copy[j + 1] := tmp
-                swapped := true
-            }
-        }
-
-        if !swapped
-            break
-    }
-
-    return copy
 }
 
 OpenEdgeOnMonitor(edgePath, url, monitor, detectTimeoutMs, fullscreenDelayMs, betweenLaunchMs, profileSwitch) {
@@ -365,38 +287,51 @@ ForceWindowPlacementAndFullscreen(hwnd, monitor, fullscreenDelayMs, betweenLaunc
     if !(hwnd && WinExist("ahk_id " hwnd))
         return false
 
-    WinRestore "ahk_id " hwnd
-    Sleep 150
+    try WinRestore "ahk_id " hwnd
+    Sleep 200
 
-    WinMove monitor.Left, monitor.Top, monitor.Width, monitor.Height, "ahk_id " hwnd
+    try WinMove monitor.Left, monitor.Top, monitor.Width, monitor.Height, "ahk_id " hwnd
+    Sleep 350
+
+    try WinActivate "ahk_id " hwnd
+    try WinWaitActive("ahk_id " hwnd, , 3)
     Sleep 250
 
-    WinActivate "ahk_id " hwnd
-    WinWaitActive "ahk_id " hwnd, , 3
-    Sleep 150
-
-    WinMaximize "ahk_id " hwnd
+    try WinMaximize "ahk_id " hwnd
     Sleep fullscreenDelayMs
 
-    WinActivate "ahk_id " hwnd
-    Sleep 150
-    SendEvent "{F11}"
-    Sleep 350
+    try SendEvent "{F11}"
+    Sleep 700
 
     WinGetPos(&x, &y, &w, &h, "ahk_id " hwnd)
 
-    if (x != monitor.Left || y != monitor.Top || w < monitor.Width || h < monitor.Height) {
-        WinRestore "ahk_id " hwnd
-        Sleep 150
-        WinMove monitor.Left, monitor.Top, monitor.Width, monitor.Height, "ahk_id " hwnd
-        Sleep 250
-        WinActivate "ahk_id " hwnd
-        WinWaitActive "ahk_id " hwnd, , 3
-        Sleep 150
-        WinMaximize "ahk_id " hwnd
-        Sleep fullscreenDelayMs
-        SendEvent "{F11}"
+    needsRetry := false
+
+    if (x != monitor.Left || y != monitor.Top)
+        needsRetry := true
+
+    if (w < monitor.Width - 20 || h < monitor.Height - 20)
+        needsRetry := true
+
+    if (needsRetry) {
+        try SendEvent "{F11}"
+        Sleep 300
+
+        try WinRestore "ahk_id " hwnd
+        Sleep 200
+
+        try WinMove monitor.Left, monitor.Top, monitor.Width, monitor.Height, "ahk_id " hwnd
         Sleep 350
+
+        try WinActivate "ahk_id " hwnd
+        try WinWaitActive("ahk_id " hwnd, , 3)
+        Sleep 250
+
+        try WinMaximize "ahk_id " hwnd
+        Sleep fullscreenDelayMs
+
+        try SendEvent "{F11}"
+        Sleep 700
     }
 
     Sleep betweenLaunchMs
@@ -407,7 +342,7 @@ DefocusBrowserWindows() {
     try {
         WinActivate "ahk_class Shell_TrayWnd"
     } catch {
-        ; se non riesce ad attivare la taskbar, ignora
+        ; ignora
     }
 }
 
@@ -435,7 +370,6 @@ ShowConfirmOnMonitor(monitor) {
     xPos := monitor.Left + Floor((monitor.Width - wOut) / 2)
     yPos := monitor.Top + Floor((monitor.Height - hOut) / 2)
 
-    ; mostra il popup senza rubare il focus alla finestra Edge
     myGui.Show(Format("x{} y{} NoActivate", xPos, yPos))
 
     WinWaitClose("ahk_id " myGui.Hwnd)

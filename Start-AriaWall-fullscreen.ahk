@@ -357,7 +357,7 @@ ArrayContains(arr, value) {
 ShowConfirmOnMonitor(monitor) {
     myGui := Gui("+AlwaysOnTop +ToolWindow -SysMenu")
     myGui.SetFont("s16 bold")
-    myGui.AddText("w560 Center", "Completa il login nella finestra in alto a sinistra, poi premi OK per aprire automaticamente le altre tre finestre.")
+    myGui.AddText("w560 Center", "Buongiorno disadattato, fai il login nella finestra in alto a sinistra, successivamente premi OK per aprire automaticamente le altre tre finestre.")
 
     okBtn := myGui.AddButton("w160 h50 Default", "OK")
     okBtn.OnEvent("Click", (*) => myGui.Destroy())

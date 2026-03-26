@@ -5,40 +5,43 @@
 ; CONFIG
 ; =========================================================
 
-; Core URLs for the 4 tiles of the wall
-TopLeftUrl := "https://aria.infra.wetechs.priv/vcf-operations/ui/inventory;mode=tree;ts=vSphere%20Hosts%20and%20Clusters-VMWARE-vSphere%20World;resourceId=3ec613a6-04f1-42ee-b5c5-de0b91915f80;tab=summary"
-TopRightUrl := "https://aria.infra.wetechs.priv/vcf-operations/ui/inventory;mode=tree;ts=vSphere%20Hosts%20and%20Clusters-VMWARE-vSphere%20World;resourceId=cc0eac06-8245-4449-b36b-238eeabaa5a8;tab=summary"
-BottomLeftUrl := "https://aria.infra.wetechs.priv/vcf-operations/ui/operations/dashboards;tabId=338e22d0-6d15-4145-872b-4cad1982c222"
+TopLeftUrl := "https://aria.infra.wetechs.priv/vcf-operations/ui/operations/dashboards;tabId=bac7c74c-a29f-4f9b-bee0-773be10ad6a3"
+TopRightUrl := "https://aria.infra.wetechs.priv/vcf-operations/ui/operations/dashboards;tabId=f81793bd-5c5e-440f-9d76-46d7532dd06d"
+BottomLeftUrl := "https://aria.infra.wetechs.priv/vcf-operations/ui/operations/dashboards;tabId=2e1e59eb-4cc8-4ae0-a0ca-cb44358fab5b"
 BottomRightUrl := "https://ws-wb1-i-wug01.infra.wetechs.priv/NmConsole/#v=Wug_view_nocviewer_NocViewer/p=%7B%22isMainView%22%3Atrue%2C%22DeckId%22%3A1%7D"
 
-UseAmazingAutoRefresh := true
-AmazingShortcut := "^!r"
-AmazingPopupShortcut := "^!a"
-AmazingIntervalSeconds := 420
-AmazingSetIntervalOnStartup := true
-AmazingStartupDelayMs := 10000
-AmazingBetweenWindowsMs := 1200
-
-EnableLegacyKeepAlive := false
-KeepAliveIntervalMs := 300000
-RefreshInKeepAlive := false
-WugKeepAliveIntervalMs := 180000
-WugRefreshEveryNTicks := 10
-
-InitialDelayMs := 3000
-BetweenLaunchMs := 700
-DetectWindowTimeoutMs := 15000
+InitialDelayMs := 5000
+BetweenLaunchMs := 400
+DetectWindowTimeoutMs := 12000
 FullscreenDelayMs := 300
 
-; FUTURE: dedicated Edge profile -> set ProfileSwitch below and keep it constant across all windows.
-ProfileSwitch := '--user-data-dir="C:\MonitorWall\EdgeProfile"'
-OpenInAppMode := false ; false = finestra Edge normale, true = app mode (--app)
+; =========================================================
+; HOOK/MOD:
+; attesa configurazione monitor stabile
+; =========================================================
+RequiredMonitorCount := 4
+MonitorPollIntervalMs := 2000
+MonitorWaitTimeoutMs := 90000
+StablePollsRequired := 2
 
-; Handle global finestra
-HwndTL := 0
-HwndTR := 0
-HwndBL := 0
-HwndBR := 0
+; =========================================================
+; HOOK/MOD:
+; esclude i monitor piccoli
+; =========================================================
+WallMonitorMinAreaRatio := 0.70
+
+; =========================================================
+; HOOK/MOD:
+; se vuoi cambiare profilo Edge, modifica solo questa riga
+; =========================================================
+ProfileSwitch := '--user-data-dir="C:\Users\ServiceDesk\Desktop\start-ariawall\EdgeProfile"'
+
+; =========================================================
+; HOOK/MOD:
+; false = finestra Edge normale
+; true  = usa --app
+; =========================================================
+OpenInAppMode := false
 
 ; =========================================================
 ; MAIN
@@ -47,141 +50,46 @@ HwndBR := 0
 Sleep InitialDelayMs
 
 edgePath := GetEdgePath()
-if (!edgePath) {
-    MsgBox "Microsoft Edge non è stato trovato nei percorsi previsti."
+if (edgePath = "") {
+    MsgBox "Microsoft Edge non trovato."
     ExitApp
 }
 
-; Attendi finché non vengono rilevati i monitor (timeout ~60 secondi = 60 tentativi)
-wall := 0
-Loop 60 {
-    monitors := GetMonitorList()
-    wall := SelectWallMonitors(monitors)
-    if (wall)
-        break
-    Sleep 1000
+monitors := WaitForStableMonitorTopology(RequiredMonitorCount, MonitorWaitTimeoutMs, MonitorPollIntervalMs, StablePollsRequired)
+
+if (monitors.Length < RequiredMonitorCount) {
+    MsgBox "Windows non ha rilevato almeno " RequiredMonitorCount " monitor in modo stabile. Rilevati: " monitors.Length
+    ExitApp
 }
 
+wall := SelectWallMonitors(monitors)
 if (!wall) {
-    MsgBox "Non sono riuscito a determinare i 4 monitor principali del wall dopo vari tentativi. Verifica i collegamenti."
+    MsgBox "Impossibile identificare correttamente i 4 monitor grandi del wall."
     ExitApp
 }
 
-; FUTURE: chiusura preventiva di eventuali vecchie finestre del wall -> inserire qui una funzione dedicata.
-
-; Open only the first window so the user can log in once.
-HwndTL := OpenEdgeOnMonitor(edgePath, TopLeftUrl, wall.TopLeft, DetectWindowTimeoutMs, FullscreenDelayMs, BetweenLaunchMs, ProfileSwitch)
+; 1) Apro solo la finestra in alto a sinistra
+global HwndTL := OpenEdgeOnMonitor(edgePath, TopLeftUrl, wall.TopLeft, DetectWindowTimeoutMs, FullscreenDelayMs, BetweenLaunchMs, ProfileSwitch)
 if (!HwndTL) {
     MsgBox "Non sono riuscito ad aprire la finestra iniziale (alto sinistra)."
     ExitApp
 }
 
+; 2) Popup sul monitor in alto a destra, senza rubare il focus
 ShowConfirmOnMonitor(wall.TopRight)
 
-HwndTR := OpenEdgeOnMonitor(edgePath, TopRightUrl, wall.TopRight, DetectWindowTimeoutMs, FullscreenDelayMs, BetweenLaunchMs, ProfileSwitch)
-HwndBL := OpenEdgeOnMonitor(edgePath, BottomLeftUrl, wall.BottomLeft, DetectWindowTimeoutMs, FullscreenDelayMs, BetweenLaunchMs, ProfileSwitch)
-HwndBR := OpenEdgeOnMonitor(edgePath, BottomRightUrl, wall.BottomRight, DetectWindowTimeoutMs, FullscreenDelayMs, BetweenLaunchMs, ProfileSwitch)
+; piccolo margine per evitare click/tasti residui dopo OK
+Sleep 300
 
-if (UseAmazingAutoRefresh) {
-    ApplyAmazingAutoRefresh(
-        [HwndTL, HwndTR, HwndBL, HwndBR],
-        AmazingShortcut,
-        AmazingPopupShortcut,
-        AmazingIntervalSeconds,
-        AmazingSetIntervalOnStartup,
-        AmazingStartupDelayMs,
-        AmazingBetweenWindowsMs
-    )
-}
+; 3) Dopo OK apro le altre 3 finestre
+global HwndTR := OpenEdgeOnMonitor(edgePath, TopRightUrl, wall.TopRight, DetectWindowTimeoutMs, FullscreenDelayMs, BetweenLaunchMs, ProfileSwitch)
+global HwndBL := OpenEdgeOnMonitor(edgePath, BottomLeftUrl, wall.BottomLeft, DetectWindowTimeoutMs, FullscreenDelayMs, BetweenLaunchMs, ProfileSwitch)
+global HwndBR := OpenEdgeOnMonitor(edgePath, BottomRightUrl, wall.BottomRight, DetectWindowTimeoutMs, FullscreenDelayMs, BetweenLaunchMs, ProfileSwitch)
 
-; Fallback opzionale se Amazing Auto Refresh non e' disponibile o non configurato.
-if (EnableLegacyKeepAlive) {
-    SetTimer KeepAliveTick, KeepAliveIntervalMs
-    SetTimer KeepAliveWugTick, WugKeepAliveIntervalMs
-}
+; 4) Tolgo il focus dall'ultima finestra aperta per evitare evidenziazioni blu
+DefocusBrowserWindows()
 
-return
-
-KeepAliveTick() {
-    global RefreshInKeepAlive, HwndTL, HwndTR, HwndBL
-    
-    ; Array che contiene SOLO le schede di vRealize / Aria.
-    ; Ignoriamo HwndBR (WUG) perché l'invio di comandi blocca il suo carousel o lo disconnette.
-    ariaWindows := [HwndTL, HwndTR, HwndBL]
-    
-    for _, hwnd in ariaWindows {
-        if (hwnd && WinExist("ahk_id " hwnd)) {
-            try {
-                if (RefreshInKeepAlive)
-                    ControlSend "{F5}",, "ahk_id " hwnd
-                else
-                    ControlSend "{F15}",, "ahk_id " hwnd
-                Sleep 200
-            }
-        }
-    }
-}
-
-KeepAliveWugTick() {
-    global HwndBR, WugRefreshEveryNTicks
-    static tick := 0
-
-    if !(HwndBR && WinExist("ahk_id " HwndBR))
-        return
-
-    tick += 1
-
-    ; Keepalive leggero su WUG senza cambiare focus della finestra.
-    try {
-        ControlSend "{F15}",, "ahk_id " HwndBR
-    }
-
-    ; Refresh raro opzionale per evitare timeout lato server molto aggressivi.
-    if (WugRefreshEveryNTicks > 0 && Mod(tick, WugRefreshEveryNTicks) = 0) {
-        try {
-            ControlSend "{F5}",, "ahk_id " HwndBR
-        }
-    }
-}
-
-ApplyAmazingAutoRefresh(hwndList, shortcut, popupShortcut, intervalSeconds, setIntervalOnStartup, startupDelayMs, betweenWindowsMs) {
-    if (shortcut = "" && popupShortcut = "")
-        return false
-
-    ; Aspetta che i contenuti web siano realmente pronti prima di inviare la scorciatoia.
-    Sleep startupDelayMs
-
-    for _, hwnd in hwndList {
-        if (hwnd && WinExist("ahk_id " hwnd)) {
-            try {
-                WinActivate "ahk_id " hwnd
-                WinWaitActive "ahk_id " hwnd, , 2
-                Sleep 150
-
-                ; Opzionale: apre il popup dell'estensione e imposta il timer in secondi.
-                if (setIntervalOnStartup && popupShortcut != "") {
-                    Send popupShortcut
-                    Sleep 300
-                    Send "^a"
-                    Sleep 50
-                    Send intervalSeconds
-                    Sleep 50
-                    Send "{Enter}"
-                    Sleep 400
-                }
-
-                ; Avvio esplicito del refresh automatico nella pagina corrente.
-                if (shortcut != "") {
-                    Send shortcut
-                }
-
-                Sleep betweenWindowsMs
-            }
-        }
-    }
-
-    return true
-}
+ExitApp
 
 ; =========================================================
 ; FUNCTIONS
@@ -199,6 +107,45 @@ GetEdgePath() {
     }
 
     return ""
+}
+
+WaitForStableMonitorTopology(requiredCount, timeoutMs, pollIntervalMs, stablePollsRequired) {
+    start := A_TickCount
+    lastList := GetMonitorList()
+    lastSig := ""
+    stableCount := 0
+
+    while ((A_TickCount - start) < timeoutMs) {
+        lastList := GetMonitorList()
+
+        if (lastList.Length >= requiredCount) {
+            sig := BuildMonitorSignature(lastList)
+
+            if (sig != "" && sig = lastSig) {
+                stableCount += 1
+            } else {
+                stableCount := 1
+                lastSig := sig
+            }
+
+            if (stableCount >= stablePollsRequired)
+                return lastList
+        }
+
+        Sleep pollIntervalMs
+    }
+
+    return lastList
+}
+
+BuildMonitorSignature(monitors) {
+    sig := ""
+
+    for _, m in monitors {
+        sig .= m.Left "|" m.Top "|" m.Width "|" m.Height ";"
+    }
+
+    return sig
 }
 
 GetMonitorList() {
@@ -229,31 +176,81 @@ GetMonitorList() {
     return list
 }
 
+GetLargestArea(monitors) {
+    maxArea := 0
+    for _, m in monitors {
+        if (m.Area > maxArea)
+            maxArea := m.Area
+    }
+    return maxArea
+}
+
+GetBigWallCandidates(monitors) {
+    global WallMonitorMinAreaRatio
+
+    maxArea := GetLargestArea(monitors)
+    minArea := Floor(maxArea * WallMonitorMinAreaRatio)
+
+    result := []
+    for _, m in monitors {
+        if (m.Area >= minArea)
+            result.Push(m)
+    }
+
+    return result
+}
+
+GetLargestMonitors(monitors, howMany) {
+    sorted := SortMonitors(monitors, "Area", true)
+    result := []
+
+    limit := Min(howMany, sorted.Length)
+    Loop limit {
+        result.Push(sorted[A_Index])
+    }
+
+    return result
+}
+
+GetRightmostMonitors(monitors, howMany) {
+    sorted := SortMonitors(monitors, "Left", true)
+    result := []
+
+    limit := Min(howMany, sorted.Length)
+    Loop limit {
+        result.Push(sorted[A_Index])
+    }
+
+    return result
+}
+
 SelectWallMonitors(monitors) {
-    ; FIX:
-    ; prima prendevi i 4 monitor più a destra.
-    ; adesso prendiamo i 4 monitor più grandi e ignoriamo quello piccolo.
     if (monitors.Length < 4)
         return 0
 
-    sortedByArea := SortMonitors(monitors, "Area")
+    ; 1) esclude i monitor piccoli
+    wallCandidates := GetBigWallCandidates(monitors)
 
-    ; prendi i 4 più grandi
-    bigFour := []
-    startIdx := sortedByArea.Length - 3
-    Loop 4 {
-        bigFour.Push(sortedByArea[startIdx + A_Index - 1])
-    }
+    ; 2) se per qualche motivo ne trova più di 4, prende i 4 più a destra tra quelli grandi
+    if (wallCandidates.Length > 4)
+        wallCandidates := GetRightmostMonitors(wallCandidates, 4)
 
-    ; ordina i 4 monitor principali dall'alto verso il basso
-    sortedByCenterY := SortMonitors(bigFour, "CenterY")
+    ; 3) fallback: se ne trova meno di 4, prende comunque i 4 più grandi
+    if (wallCandidates.Length < 4)
+        wallCandidates := GetLargestMonitors(monitors, 4)
+
+    if (wallCandidates.Length < 4)
+        return 0
+
+    ; divide in alto/basso usando il centro verticale
+    sortedByCenterY := SortMonitors(wallCandidates, "CenterY", false)
 
     topTwo := [sortedByCenterY[1], sortedByCenterY[2]]
     bottomTwo := [sortedByCenterY[3], sortedByCenterY[4]]
 
-    ; dentro ogni riga, ordina da sinistra a destra
-    topSorted := SortMonitors(topTwo, "CenterX")
-    bottomSorted := SortMonitors(bottomTwo, "CenterX")
+    ; dentro ogni riga divide sinistra/destra
+    topSorted := SortMonitors(topTwo, "CenterX", false)
+    bottomSorted := SortMonitors(bottomTwo, "CenterX", false)
 
     return {
         TopLeft: topSorted[1],
@@ -263,21 +260,36 @@ SelectWallMonitors(monitors) {
     }
 }
 
-SortMonitors(arr, prop) {
-    copy := arr.Clone()
+SortMonitors(arr, prop, descending := false) {
+    copy := []
+
+    for _, item in arr
+        copy.Push(item)
 
     len := copy.Length
     if (len <= 1)
         return copy
 
-    ; Simple bubble sort to avoid method issues on older runtimes
     Loop len - 1 {
-        outerIndex := A_Index
+        pass := A_Index
         swapped := false
 
-        Loop len - outerIndex {
+        Loop len - pass {
             j := A_Index
-            if (copy[j].%prop% > copy[j + 1].%prop%) {
+
+            leftVal := copy[j].%prop%
+            rightVal := copy[j + 1].%prop%
+
+            shouldSwap := false
+            if (descending) {
+                if (leftVal < rightVal)
+                    shouldSwap := true
+            } else {
+                if (leftVal > rightVal)
+                    shouldSwap := true
+            }
+
+            if (shouldSwap) {
                 tmp := copy[j]
                 copy[j] := copy[j + 1]
                 copy[j + 1] := tmp
@@ -296,49 +308,107 @@ OpenEdgeOnMonitor(edgePath, url, monitor, detectTimeoutMs, fullscreenDelayMs, be
     global OpenInAppMode
 
     existing := WinGetList("ahk_exe msedge.exe")
+    pid := 0
 
     if (OpenInAppMode)
         runCmd := Format('"{1}" {2} --new-window --app="{3}"', edgePath, profileSwitch, url)
     else
         runCmd := Format('"{1}" {2} --new-window "{3}"', edgePath, profileSwitch, url)
 
-    Run runCmd
+    Run runCmd, , , &pid
 
-    hwnd := WaitForNewEdgeWindow(existing, detectTimeoutMs)
+    hwnd := WaitForEdgeWindow(existing, pid, detectTimeoutMs)
     if (!hwnd)
         return 0
 
-    WinRestore "ahk_id " hwnd
-    Sleep 200
-    WinMove monitor.Left, monitor.Top, monitor.Width, monitor.Height, "ahk_id " hwnd
-    Sleep 400
-    WinActivate "ahk_id " hwnd
-    Sleep 300
-    WinMaximize "ahk_id " hwnd
-    Sleep fullscreenDelayMs
-    Send "{F11}"
-    Sleep betweenLaunchMs
-
+    ForceWindowPlacementAndFullscreen(hwnd, monitor, fullscreenDelayMs, betweenLaunchMs)
     return hwnd
 }
 
-WaitForNewEdgeWindow(existingList, timeoutMs) {
+WaitForEdgeWindow(existingList, pid, timeoutMs) {
     start := A_TickCount
 
     while (A_TickCount - start < timeoutMs) {
-        current := WinGetList("ahk_exe msedge.exe")
-
-        for _, hwnd in current {
-            if !ArrayContains(existingList, hwnd) {
-                if (WinGetTitle("ahk_id " hwnd) != "")
+        if (pid) {
+            byPid := WinGetList("ahk_pid " pid)
+            for _, hwnd in byPid {
+                if (IsUsableEdgeWindow(hwnd))
                     return hwnd
             }
         }
 
-        Sleep 250
+        current := WinGetList("ahk_exe msedge.exe")
+        for _, hwnd in current {
+            if (!ArrayContains(existingList, hwnd) && IsUsableEdgeWindow(hwnd))
+                return hwnd
+        }
+
+        Sleep 200
     }
 
     return 0
+}
+
+IsUsableEdgeWindow(hwnd) {
+    try {
+        class := WinGetClass("ahk_id " hwnd)
+        if (class != "Chrome_WidgetWin_1")
+            return false
+
+        return true
+    } catch {
+        return false
+    }
+}
+
+ForceWindowPlacementAndFullscreen(hwnd, monitor, fullscreenDelayMs, betweenLaunchMs) {
+    if !(hwnd && WinExist("ahk_id " hwnd))
+        return false
+
+    WinRestore "ahk_id " hwnd
+    Sleep 150
+
+    WinMove monitor.Left, monitor.Top, monitor.Width, monitor.Height, "ahk_id " hwnd
+    Sleep 250
+
+    WinActivate "ahk_id " hwnd
+    WinWaitActive "ahk_id " hwnd, , 3
+    Sleep 150
+
+    WinMaximize "ahk_id " hwnd
+    Sleep fullscreenDelayMs
+
+    WinActivate "ahk_id " hwnd
+    Sleep 150
+    SendEvent "{F11}"
+    Sleep 350
+
+    WinGetPos(&x, &y, &w, &h, "ahk_id " hwnd)
+
+    if (x != monitor.Left || y != monitor.Top || w < monitor.Width || h < monitor.Height) {
+        WinRestore "ahk_id " hwnd
+        Sleep 150
+        WinMove monitor.Left, monitor.Top, monitor.Width, monitor.Height, "ahk_id " hwnd
+        Sleep 250
+        WinActivate "ahk_id " hwnd
+        WinWaitActive "ahk_id " hwnd, , 3
+        Sleep 150
+        WinMaximize "ahk_id " hwnd
+        Sleep fullscreenDelayMs
+        SendEvent "{F11}"
+        Sleep 350
+    }
+
+    Sleep betweenLaunchMs
+    return true
+}
+
+DefocusBrowserWindows() {
+    try {
+        WinActivate "ahk_class Shell_TrayWnd"
+    } catch {
+        ; se non riesce ad attivare la taskbar, ignora
+    }
 }
 
 ArrayContains(arr, value) {
@@ -352,21 +422,22 @@ ArrayContains(arr, value) {
 ShowConfirmOnMonitor(monitor) {
     myGui := Gui("+AlwaysOnTop +ToolWindow -SysMenu")
     myGui.SetFont("s16 bold")
-    myGui.AddText("w520 Center", "Completa il login nella finestra in alto a sinistra, poi premi OK per aprire automaticamente le altre tre finestre.")
-    
+    myGui.AddText("w560 Center", "Completa il login nella finestra in alto a sinistra, poi premi OK per aprire automaticamente le altre tre finestre.")
+
     okBtn := myGui.AddButton("w160 h50 Default", "OK")
     okBtn.OnEvent("Click", (*) => myGui.Destroy())
 
     myGui.Show("AutoSize Hide")
-    
+
     xOut := 0, yOut := 0, wOut := 0, hOut := 0
     myGui.GetPos(&xOut, &yOut, &wOut, &hOut)
-    
+
     xPos := monitor.Left + Floor((monitor.Width - wOut) / 2)
     yPos := monitor.Top + Floor((monitor.Height - hOut) / 2)
-    myGui.Show(Format("x{} y{}", xPos, yPos))
+
+    ; mostra il popup senza rubare il focus alla finestra Edge
+    myGui.Show(Format("x{} y{} NoActivate", xPos, yPos))
 
     WinWaitClose("ahk_id " myGui.Hwnd)
-
     return true
 }

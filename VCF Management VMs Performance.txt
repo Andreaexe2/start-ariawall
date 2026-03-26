@@ -1,0 +1,200 @@
+VCF Management VMs Performance
+Off
+300
+ 
+VCF Rightsizing
+Off
+300
+ 
+VCF SDDC Manager Appliance Deep Dive
+Off
+300
+ 
+VCF vCenters Performance
+Off
+300
+ 
+VCF Workload Host Performance
+Off
+300
+ 
+VCF Workload Network Performance
+Off
+300
+ 
+VCF Workload Storage Performance
+Off
+300
+ 
+VCF Workload VMs Performance
+Off
+300
+ 
+Virtual Machine Relationships
+Off
+300
+ 
+VM Availability
+Off
+300
+ 
+VM Capacity 2.0
+Off
+300
+ 
+VM Configuration
+Off
+300
+ 
+VM Cost vs. Price
+Off
+300
+ 
+VM Details
+Off
+300
+ 
+VM Performance 2.0
+Off
+300
+ 
+VM Rightsizing
+Off
+300
+ 
+VM Rightsizing Details
+Off
+300
+ 
+VM Storage Configuration
+Off
+300
+ 
+VMware Aria Operations Billing by CPU
+Off
+300
+ 
+VMware Aria Operations Billing by CPU Cores
+Off
+300
+ 
+VMware Aria Operations Billing by OSI
+Off
+300
+ 
+VMware Infra Certificate Overview
+Off
+300
+ 
+VMware Infra Health Historic Trend
+Off
+300
+ 
+VMware Infra Health Overview
+Off
+300
+ 
+VMware Infra Host System
+Off
+300
+ 
+VMware Infra Management Health Overview
+Off
+300
+ 
+VMware Infra Management VM Optimizer
+Off
+300
+ 
+VMware Infra VCF BOM Version
+Off
+300
+ 
+vSAN Configuration
+Off
+300
+ 
+vSAN ESA Capacity
+Off
+300
+ 
+vSAN ESA Performance
+Off
+300
+ 
+vSAN File Services
+Off
+300
+ 
+vSAN Health
+Off
+300
+ 
+vSAN OSA Capacity
+Off
+300
+ 
+vSAN OSA Performance
+Off
+300
+ 
+vSAN Stretched Clusters
+Off
+300
+ 
+vSphere Availability
+Off
+300
+ 
+vSphere Cluster Capacity 2.0
+Off
+300
+ 
+vSphere Cluster Configuration 2.0
+Off
+300
+ 
+vSphere Compute Inventory
+Off
+300
+ 
+vSphere Daily Check
+Off
+300
+ 
+vSphere Network Configuration 2.0
+Off
+300
+ 
+vSphere Network Inventory
+Off
+300
+ 
+vSphere Performance Profiling
+Off
+300
+ 
+vSphere Resource Management
+Off
+300
+ 
+vSphere Storage Inventory
+Off
+300
+ 
+vSphere VM Inventory
+Off
+300
+ 
+Windows OS discovered by Telegraf
+Off
+300
+ 
+Workload Management Configuration
+Off
+300
+ 
+Workload Management Inventory
+Off
+300
+ 
